@@ -46,8 +46,11 @@ pub fn propose(mods: &[ModFile], current: &[String], pins: &Pins) -> SortResult 
     }
 
     let is_pinned = |n: &str| pins.top.iter().any(|p| p == n) || pins.bottom.iter().any(|p| p == n);
-    let index: BTreeMap<&str, usize> =
-        working.iter().enumerate().map(|(i, n)| (n.as_str(), i)).collect();
+    let index: BTreeMap<&str, usize> = working
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.as_str(), i))
+        .collect();
 
     // Edges: precede[a] = set of b that must come after a.
     let mut successors: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
@@ -73,7 +76,10 @@ pub fn propose(mods: &[ModFile], current: &[String], pins: &Pins) -> SortResult 
             if successors.entry(first).or_default().insert(second) {
                 *indegree.get_mut(second).unwrap() += 1;
                 let (fm, sm) = (by_name[first], by_name[second]);
-                let entry = blame.entry(second).or_insert((first, sm.assets.len(), fm.assets.len()));
+                let entry =
+                    blame
+                        .entry(second)
+                        .or_insert((first, sm.assets.len(), fm.assets.len()));
                 if fm.assets.len() > entry.2 {
                     *entry = (first, sm.assets.len(), fm.assets.len());
                 }
@@ -128,7 +134,10 @@ pub fn propose(mods: &[ModFile], current: &[String], pins: &Pins) -> SortResult 
                 ),
                 None => "position shifted by other moves".to_string(),
             };
-            moves.push(Move { name: name.clone(), reason });
+            moves.push(Move {
+                name: name.clone(),
+                reason,
+            });
         }
     }
     SortResult { proposed, moves }
@@ -145,7 +154,10 @@ mod tests {
             path: format!("/tmp/{name}.otr").into(),
             name: name.into(),
             enabled: true,
-            assets: assets.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>(),
+            assets: assets
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<BTreeSet<_>>(),
             error: None,
             gamebanana_mod_id: None,
         }
@@ -156,9 +168,15 @@ mod tests {
         let mods = vec![mk("SwordSkin", &["a"]), mk("BigOverhaul", &["a", "b", "c"])];
         let current: Vec<String> = ["SwordSkin", "BigOverhaul"].map(String::from).into();
         let result = propose(&mods, &current, &Pins::default());
-        assert_eq!(result.proposed, vec!["BigOverhaul".to_string(), "SwordSkin".to_string()]);
+        assert_eq!(
+            result.proposed,
+            vec!["BigOverhaul".to_string(), "SwordSkin".to_string()]
+        );
         assert_eq!(result.moves.len(), 2);
-        assert!(result.moves.iter().any(|m| m.name == "SwordSkin" && m.reason.contains("BigOverhaul")));
+        assert!(result
+            .moves
+            .iter()
+            .any(|m| m.name == "SwordSkin" && m.reason.contains("BigOverhaul")));
     }
 
     #[test]
@@ -174,9 +192,15 @@ mod tests {
     fn pins_override_heuristics() {
         let mods = vec![mk("SwordSkin", &["a"]), mk("BigOverhaul", &["a", "b", "c"])];
         let current: Vec<String> = ["SwordSkin", "BigOverhaul"].map(String::from).into();
-        let pins = Pins { top: vec!["SwordSkin".into()], bottom: vec![] };
+        let pins = Pins {
+            top: vec!["SwordSkin".into()],
+            bottom: vec![],
+        };
         let result = propose(&mods, &current, &pins);
-        assert_eq!(result.proposed, vec!["SwordSkin".to_string(), "BigOverhaul".to_string()]);
+        assert_eq!(
+            result.proposed,
+            vec!["SwordSkin".to_string(), "BigOverhaul".to_string()]
+        );
     }
 
     #[test]
@@ -230,8 +254,36 @@ mod tests {
         assert_eq!(a_count, 1, "Mod A should appear exactly once");
         assert_eq!(b_count, 1, "Mod B should appear exactly once");
         // proposed should have exactly 2 elements (A and B)
-        assert_eq!(result.proposed.len(), 2, "proposed should have exactly 2 mods");
+        assert_eq!(
+            result.proposed.len(),
+            2,
+            "proposed should have exactly 2 mods"
+        );
         // proposed should equal ["A", "B"]
         assert_eq!(result.proposed, vec!["A".to_string(), "B".to_string()]);
+    }
+
+    #[test]
+    fn error_and_disabled_mods_are_excluded_from_proposal() {
+        let mut broken = mk("Broken", &["a"]);
+        broken.error = Some("no (listfile)".into());
+        let mut parked = mk("Parked", &["b"]);
+        parked.enabled = false;
+        let mods = vec![mk("Fine", &["c"]), broken, parked];
+        let current: Vec<String> = ["Broken", "Parked", "Fine"].map(String::from).into();
+        let result = propose(&mods, &current, &Pins::default());
+        assert_eq!(result.proposed, vec!["Fine".to_string()]);
+    }
+
+    #[test]
+    fn mods_missing_from_current_append_alphabetically() {
+        let mods = vec![mk("Zulu", &["z"]), mk("Alpha", &["a"]), mk("Kept", &["k"])];
+        let current: Vec<String> = ["Kept"].map(String::from).into();
+        let result = propose(&mods, &current, &Pins::default());
+        assert_eq!(
+            result.proposed,
+            vec!["Kept".to_string(), "Alpha".to_string(), "Zulu".to_string()],
+            "missing mods should append after current order, alphabetically"
+        );
     }
 }

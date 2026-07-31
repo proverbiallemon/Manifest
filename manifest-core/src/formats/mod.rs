@@ -1,8 +1,9 @@
 use std::path::Path;
 
-pub mod mpq_crypt;
 pub mod mpq;
-#[cfg(test)] pub mod mpq_fixture;
+pub mod mpq_crypt;
+#[cfg(test)]
+pub mod mpq_fixture;
 
 pub use mpq::list_mpq_assets;
 
@@ -67,10 +68,13 @@ mod zip_tests {
         let dir = tempfile::tempdir().unwrap();
         let path = fixture_zip(dir.path());
         let assets = list_zip_assets(&path).unwrap();
-        assert_eq!(assets, vec![
-            "alt/objects/gShieldTex".to_string(),
-            "alt/objects/gSwordTex".to_string(),
-        ]);
+        assert_eq!(
+            assets,
+            vec![
+                "alt/objects/gShieldTex".to_string(),
+                "alt/objects/gSwordTex".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -78,6 +82,9 @@ mod zip_tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("bad.o2r");
         std::fs::write(&path, b"PK\x03\x04 not really a zip").unwrap();
-        assert!(matches!(list_zip_assets(&path), Err(FormatError::Corrupt(_))));
+        assert!(matches!(
+            list_zip_assets(&path),
+            Err(FormatError::Corrupt(_))
+        ));
     }
 }

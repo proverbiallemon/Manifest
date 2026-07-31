@@ -17,7 +17,10 @@ pub fn detect(mods: &[ModFile], _order: &[String], graph: &ConflictGraph) -> Vec
 
     for m in &enabled {
         if let Some(reason) = &m.error {
-            warnings.push(Warning::Unlistable { name: m.name.clone(), reason: reason.clone() });
+            warnings.push(Warning::Unlistable {
+                name: m.name.clone(),
+                reason: reason.clone(),
+            });
         }
     }
 
@@ -49,7 +52,9 @@ pub fn detect(mods: &[ModFile], _order: &[String], graph: &ConflictGraph) -> Vec
             .iter()
             .all(|a| graph.winner(a).map(|w| w != &m.name).unwrap_or(false));
         if eclipsed {
-            warnings.push(Warning::TotalEclipse { name: m.name.clone() });
+            warnings.push(Warning::TotalEclipse {
+                name: m.name.clone(),
+            });
         }
     }
 
@@ -98,7 +103,10 @@ mod tests {
             path: format!("/tmp/{name}/f.otr").into(),
             name: name.into(),
             enabled: true,
-            assets: assets.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>(),
+            assets: assets
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<BTreeSet<_>>(),
             error: error.map(String::from),
             gamebanana_mod_id: None,
         }
@@ -114,11 +122,14 @@ mod tests {
             mk("TwinTwo", &["z"], None),
             mk("Sick", &[], Some("no (listfile)")),
         ];
-        let order: Vec<String> =
-            ["Eclipsed", "CoverA", "CoverB", "TwinOne", "TwinTwo"].map(String::from).into();
+        let order: Vec<String> = ["Eclipsed", "CoverA", "CoverB", "TwinOne", "TwinTwo"]
+            .map(String::from)
+            .into();
         let graph = ConflictGraph::build(&mods, &order);
         let warnings = detect(&mods, &order, &graph);
-        assert!(warnings.contains(&Warning::TotalEclipse { name: "Eclipsed".into() }));
+        assert!(warnings.contains(&Warning::TotalEclipse {
+            name: "Eclipsed".into()
+        }));
         assert!(warnings.contains(&Warning::MutualOverlap {
             names: vec!["TwinOne".into(), "TwinTwo".into()]
         }));
@@ -128,7 +139,9 @@ mod tests {
         }));
         // TwinOne is overridden on its only asset, but mutual overlap is the
         // more precise diagnosis - it must NOT also be reported as eclipsed.
-        assert!(!warnings.contains(&Warning::TotalEclipse { name: "TwinOne".into() }));
+        assert!(!warnings.contains(&Warning::TotalEclipse {
+            name: "TwinOne".into()
+        }));
     }
 
     #[test]

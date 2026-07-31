@@ -4,7 +4,9 @@ use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
 fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -15,9 +17,8 @@ fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn folder_gamebanana_id(path: &Path) -> Option<u64> {
-    let sidecar = path.parent()?.join(".sailswift.json");
-    let text = std::fs::read_to_string(sidecar).ok()?;
+fn folder_gamebanana_id(folder: &Path) -> Option<u64> {
+    let text = std::fs::read_to_string(folder.join(".sailswift.json")).ok()?;
     let value: serde_json::Value = serde_json::from_str(&text).ok()?;
     value.get("gameBananaModId")?.as_u64()
 }
@@ -25,6 +26,19 @@ fn folder_gamebanana_id(path: &Path) -> Option<u64> {
 pub fn scan_library(mods_dir: &Path) -> Vec<ModFile> {
     let mut files = Vec::new();
     collect_files(mods_dir, &mut files);
+
+    // Read each folder's .sailswift.json once, not once per file in it.
+    let folders: std::collections::BTreeSet<PathBuf> = files
+        .iter()
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        .collect();
+    let folder_ids: std::collections::BTreeMap<PathBuf, Option<u64>> = folders
+        .into_iter()
+        .map(|f| {
+            let id = folder_gamebanana_id(&f);
+            (f, id)
+        })
+        .collect();
 
     let mut mods: Vec<ModFile> = files
         .par_iter()
@@ -38,7 +52,11 @@ pub fn scan_library(mods_dir: &Path) -> Vec<ModFile> {
                 _ => return None,
             };
             let name = path.file_stem()?.to_string_lossy().to_string();
-            let listed = if is_mpq { list_mpq_assets(path) } else { list_zip_assets(path) };
+            let listed = if is_mpq {
+                list_mpq_assets(path)
+            } else {
+                list_zip_assets(path)
+            };
             let (assets, error) = match listed {
                 Ok(list) => (list.into_iter().collect(), None),
                 Err(e) => (Default::default(), Some(e.to_string())),
@@ -49,7 +67,11 @@ pub fn scan_library(mods_dir: &Path) -> Vec<ModFile> {
                 enabled,
                 assets,
                 error,
-                gamebanana_mod_id: folder_gamebanana_id(path),
+                gamebanana_mod_id: path
+                    .parent()
+                    .and_then(|p| folder_ids.get(p))
+                    .copied()
+                    .flatten(),
             })
         })
         .collect();
@@ -82,6 +104,11 @@ mod tests {
         std::fs::write(folder.join("Sword.otr"), build_mpq(&[("alt/gA", b"a")])).unwrap();
         write_zip(&folder.join("Shield.o2r"), &["alt/gB"]);
         write_zip(&folder.join("Parked.di2abled"), &["alt/gC"]);
+        std::fs::write(
+            folder.join("Benched.disabled"),
+            build_mpq(&[("alt/gD", b"d")]),
+        )
+        .unwrap();
         std::fs::write(folder.join("Broken.otr"), b"garbage").unwrap();
         std::fs::write(
             folder.join(".sailswift.json"),
@@ -89,14 +116,42 @@ mod tests {
         ).unwrap();
 
         let mods = scan_library(dir.path());
-        assert_eq!(mods.len(), 4);
+        assert_eq!(mods.len(), 5);
         let by_name: std::collections::HashMap<_, _> =
             mods.iter().map(|m| (m.name.clone(), m)).collect();
         assert!(by_name["Sword"].enabled);
         assert_eq!(by_name["Sword"].assets.len(), 1);
         assert_eq!(by_name["Sword"].gamebanana_mod_id, Some(123));
         assert!(!by_name["Parked"].enabled);
+        assert!(!by_name["Benched"].enabled);
+        assert_eq!(
+            by_name["Benched"].assets.len(),
+            1,
+            "disabled MPQ must still list assets"
+        );
+        assert!(by_name["Benched"].error.is_none());
         assert!(by_name["Broken"].error.is_some());
         assert!(by_name["Broken"].assets.is_empty());
+    }
+
+    #[test]
+    fn scan_output_is_sorted_by_path() {
+        let dir = tempfile::tempdir().unwrap();
+        // Create in an order that differs from path order to prove the sort.
+        for folder in ["Zeta Pack", "Alpha Pack", "Mid Pack"] {
+            let f = dir.path().join(folder);
+            std::fs::create_dir(&f).unwrap();
+            write_zip(&f.join("b.o2r"), &["x"]);
+            write_zip(&f.join("a.o2r"), &["y"]);
+        }
+        let mods = scan_library(dir.path());
+        let paths: Vec<_> = mods.iter().map(|m| m.path.clone()).collect();
+        let mut sorted = paths.clone();
+        sorted.sort();
+        assert_eq!(
+            paths, sorted,
+            "scan_library must return path-sorted results"
+        );
+        assert_eq!(mods.len(), 6);
     }
 }

@@ -75,7 +75,10 @@ mod tests {
             path: format!("/tmp/{name}.otr").into(),
             name: name.into(),
             enabled: true,
-            assets: assets.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>(),
+            assets: assets
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<BTreeSet<_>>(),
             error: None,
             gamebanana_mod_id: None,
         }
