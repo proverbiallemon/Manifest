@@ -39,7 +39,7 @@ fn scan_reports_conflicts_with_exit_code_3() {
         .code(3);
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["schema_version"], 2);
     assert_eq!(json["conflicts"][0]["asset"], "a");
 }
 
