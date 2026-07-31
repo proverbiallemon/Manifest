@@ -55,7 +55,7 @@ pub fn detect(mods: &[ModFile], _order: &[String], graph: &ConflictGraph) -> Vec
 
     // Duplicate GameBanana mod across distinct folders.
     let mut by_gb: BTreeMap<u64, Vec<(String, String)>> = BTreeMap::new();
-    for m in &enabled {
+    for m in mods.iter() {
         if let (Some(id), Some(folder)) = (
             m.gamebanana_mod_id,
             m.path.parent().map(|p| p.to_string_lossy().to_string()),
@@ -73,7 +73,16 @@ pub fn detect(mods: &[ModFile], _order: &[String], graph: &ConflictGraph) -> Vec
         }
     }
 
-    warnings.sort_by_key(|w| format!("{w:?}"));
+    // Sort by kind (0-3) then by primary name for determinism
+    warnings.sort_by_key(|w| {
+        let (kind_rank, primary_name) = match w {
+            Warning::DuplicateGamebananaMod { mod_id, names: _ } => (0, mod_id.to_string()),
+            Warning::MutualOverlap { names } => (1, names.first().cloned().unwrap_or_default()),
+            Warning::TotalEclipse { name } => (2, name.clone()),
+            Warning::Unlistable { name, reason: _ } => (3, name.clone()),
+        };
+        (kind_rank, primary_name)
+    });
     warnings
 }
 
@@ -120,5 +129,69 @@ mod tests {
         // TwinOne is overridden on its only asset, but mutual overlap is the
         // more precise diagnosis - it must NOT also be reported as eclipsed.
         assert!(!warnings.contains(&Warning::TotalEclipse { name: "TwinOne".into() }));
+    }
+
+    #[test]
+    fn detects_duplicate_gamebanana_across_folders_with_disabled_mod() {
+        // Test that DuplicateGamebananaMod is detected across different parent folders
+        // even when one mod is disabled.
+        let mod1 = ModFile {
+            path: "/folder1/mod_a.otr".into(),
+            name: "ModA".into(),
+            enabled: true,
+            assets: BTreeSet::new(),
+            error: None,
+            gamebanana_mod_id: Some(777),
+        };
+        let mod2 = ModFile {
+            path: "/folder2/mod_b.otr".into(),
+            name: "ModB".into(),
+            enabled: false, // disabled
+            assets: BTreeSet::new(),
+            error: None,
+            gamebanana_mod_id: Some(777),
+        };
+        let mods = vec![mod1, mod2];
+        let order: Vec<String> = vec![];
+        let graph = ConflictGraph::build(&mods, &order);
+        let warnings = detect(&mods, &order, &graph);
+
+        // Should detect duplicate across folders despite disabled status
+        assert!(warnings.contains(&Warning::DuplicateGamebananaMod {
+            mod_id: 777,
+            names: vec!["ModA".into(), "ModB".into()]
+        }));
+    }
+
+    #[test]
+    fn does_not_detect_duplicate_gamebanana_in_same_folder() {
+        // Test that two mods with same gamebanana_mod_id in the SAME folder
+        // do NOT trigger the duplicate warning.
+        let mod1 = ModFile {
+            path: "/shared/mod_a.otr".into(),
+            name: "ModA".into(),
+            enabled: true,
+            assets: BTreeSet::new(),
+            error: None,
+            gamebanana_mod_id: Some(777),
+        };
+        let mod2 = ModFile {
+            path: "/shared/mod_b.otr".into(),
+            name: "ModB".into(),
+            enabled: true,
+            assets: BTreeSet::new(),
+            error: None,
+            gamebanana_mod_id: Some(777),
+        };
+        let mods = vec![mod1, mod2];
+        let order: Vec<String> = vec![];
+        let graph = ConflictGraph::build(&mods, &order);
+        let warnings = detect(&mods, &order, &graph);
+
+        // Should NOT detect duplicate since both are in the same parent folder
+        assert!(!warnings.contains(&Warning::DuplicateGamebananaMod {
+            mod_id: 777,
+            names: vec!["ModA".into(), "ModB".into()]
+        }));
     }
 }
