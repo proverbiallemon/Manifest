@@ -2,6 +2,7 @@ use std::path::Path;
 
 pub mod mpq_crypt;
 pub mod mpq;
+#[cfg(test)] pub mod mpq_fixture;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormatError {
