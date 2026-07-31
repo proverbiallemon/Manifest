@@ -64,9 +64,18 @@ pub fn write_order(path: &Path, order: &[String]) -> Result<(), String> {
         .map(|s| s.replace('|', "-"))
         .collect::<Vec<_>>()
         .join("|");
-    let gsettings = value
-        .pointer_mut("/CVars/gSettings")
-        .ok_or("config has no CVars.gSettings object")?;
+    let root = value
+        .as_object_mut()
+        .ok_or("config root is not a JSON object")?;
+    let Some(cvars) = root.get_mut("CVars") else {
+        return Err("config has no CVars object".into());
+    };
+    let cvars = cvars
+        .as_object_mut()
+        .ok_or("config CVars is not an object")?;
+    let Some(gsettings) = cvars.get_mut("gSettings") else {
+        return Err("config has no CVars.gSettings object".into());
+    };
     let obj = gsettings
         .as_object_mut()
         .ok_or("config CVars.gSettings is not an object")?;
@@ -146,6 +155,38 @@ mod tests {
         let path = dir.path().join("shipofharkinian.json");
         std::fs::write(&path, r#"{"CVars":{"gSettings":{"AltAssets":1}}}"#).unwrap();
         assert_eq!(read_order(&path).unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn write_order_refuses_non_object_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        let original = r#"[1, 2, 3]"#;
+        std::fs::write(&path, original).unwrap();
+        let err = write_order(&path, &["A".to_string()]).unwrap_err();
+        assert!(err.contains("root"), "error should name the root: {err}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn write_order_refuses_non_object_cvars() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        let original = r#"{"CVars":"oops"}"#;
+        std::fs::write(&path, original).unwrap();
+        let err = write_order(&path, &["A".to_string()]).unwrap_err();
+        assert!(err.contains("CVars"), "error should name CVars: {err}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn write_order_refuses_missing_cvars() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        let original = r#"{}"#;
+        std::fs::write(&path, original).unwrap();
+        assert!(write_order(&path, &["A".to_string()]).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
     }
 
     #[test]
