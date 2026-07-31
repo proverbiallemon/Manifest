@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand};
 use manifest_core::{config, report, scan::scan_library, sort::Pins};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -20,8 +20,9 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    #[command(group(ArgGroup::new("mode").required(true).args(["dry_run", "write"])))]
     Sort {
-        #[arg(long, conflicts_with = "write")]
+        #[arg(long)]
         dry_run: bool,
         #[arg(long)]
         write: bool,

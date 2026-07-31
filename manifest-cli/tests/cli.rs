@@ -72,3 +72,48 @@ fn clean_library_exits_zero() {
         .assert()
         .code(0);
 }
+
+#[test]
+fn sort_without_mode_flag_is_a_usage_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mods, config) = fixture(dir.path());
+    let before = std::fs::read_to_string(&config).unwrap();
+    let output = Command::cargo_bin("manifest").unwrap()
+        .args(["sort"])
+        .args(["--mods-dir", mods.to_str().unwrap()])
+        .args(["--config", config.to_str().unwrap()])
+        .assert()
+        .code(2);
+    let stderr = String::from_utf8(output.get_output().stderr.clone()).unwrap();
+    assert!(stderr.contains("--dry-run"), "usage error should name --dry-run: {stderr}");
+    assert!(stderr.contains("--write"), "usage error should name --write: {stderr}");
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), before, "config must be untouched");
+}
+
+#[test]
+fn sort_rejects_both_mode_flags() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mods, config) = fixture(dir.path());
+    Command::cargo_bin("manifest").unwrap()
+        .args(["sort", "--dry-run", "--write"])
+        .args(["--mods-dir", mods.to_str().unwrap()])
+        .args(["--config", config.to_str().unwrap()])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn sort_dry_run_proposes_without_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mods, config) = fixture(dir.path());
+    let before = std::fs::read_to_string(&config).unwrap();
+    let output = Command::cargo_bin("manifest").unwrap()
+        .args(["sort", "--dry-run"])
+        .args(["--mods-dir", mods.to_str().unwrap()])
+        .args(["--config", config.to_str().unwrap()])
+        .assert()
+        .code(0);
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("dry run"), "expected dry run banner: {stdout}");
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), before, "dry run must not write");
+}
