@@ -234,4 +234,28 @@ mod tests {
         // proposed should equal ["A", "B"]
         assert_eq!(result.proposed, vec!["A".to_string(), "B".to_string()]);
     }
+
+    #[test]
+    fn error_and_disabled_mods_are_excluded_from_proposal() {
+        let mut broken = mk("Broken", &["a"]);
+        broken.error = Some("no (listfile)".into());
+        let mut parked = mk("Parked", &["b"]);
+        parked.enabled = false;
+        let mods = vec![mk("Fine", &["c"]), broken, parked];
+        let current: Vec<String> = ["Broken", "Parked", "Fine"].map(String::from).into();
+        let result = propose(&mods, &current, &Pins::default());
+        assert_eq!(result.proposed, vec!["Fine".to_string()]);
+    }
+
+    #[test]
+    fn mods_missing_from_current_append_alphabetically() {
+        let mods = vec![mk("Zulu", &["z"]), mk("Alpha", &["a"]), mk("Kept", &["k"])];
+        let current: Vec<String> = ["Kept"].map(String::from).into();
+        let result = propose(&mods, &current, &Pins::default());
+        assert_eq!(
+            result.proposed,
+            vec!["Kept".to_string(), "Alpha".to_string(), "Zulu".to_string()],
+            "missing mods should append after current order, alphabetically"
+        );
+    }
 }
