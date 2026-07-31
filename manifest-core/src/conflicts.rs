@@ -31,7 +31,10 @@ impl ConflictGraph {
     }
 
     pub fn conflicting(&self) -> BTreeMap<&String, &Vec<String>> {
-        self.providers.iter().filter(|(_, v)| v.len() >= 2).collect()
+        self.providers
+            .iter()
+            .filter(|(_, v)| v.len() >= 2)
+            .collect()
     }
 
     pub fn winner<'a>(&'a self, asset: &str) -> Option<&'a String> {
@@ -50,7 +53,10 @@ mod tests {
             path: format!("/tmp/{name}.otr").into(),
             name: name.into(),
             enabled,
-            assets: assets.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>(),
+            assets: assets
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<BTreeSet<_>>(),
             error: None,
             gamebanana_mod_id: None,
         }
@@ -67,7 +73,10 @@ mod tests {
         let graph = ConflictGraph::build(&mods, &order);
         let conflicting = graph.conflicting();
         assert_eq!(conflicting.len(), 1);
-        assert_eq!(conflicting[&"b".to_string()], &vec!["Big".to_string(), "Small".to_string()]);
+        assert_eq!(
+            conflicting[&"b".to_string()],
+            &vec!["Big".to_string(), "Small".to_string()]
+        );
         assert_eq!(graph.winner("b"), Some(&"Small".to_string()));
         assert_eq!(graph.winner("a"), Some(&"Big".to_string()));
     }

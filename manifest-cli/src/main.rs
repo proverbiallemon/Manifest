@@ -4,7 +4,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[command(name = "manifest", version, about = "SoH load order analyzer and sorter")]
+#[command(
+    name = "manifest",
+    version,
+    about = "SoH load order analyzer and sorter"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Cmd,
@@ -27,7 +31,9 @@ enum Cmd {
         #[arg(long)]
         write: bool,
     },
-    Explain { mod_name: String },
+    Explain {
+        mod_name: String,
+    },
 }
 
 fn resolve_paths(cli: &Cli) -> Result<(PathBuf, PathBuf), String> {
@@ -37,7 +43,10 @@ fn resolve_paths(cli: &Cli) -> Result<(PathBuf, PathBuf), String> {
         .or_else(config::default_config_path)
         .ok_or("could not determine config path; pass --config")?;
     let mods_dir = cli.mods_dir.clone().unwrap_or_else(|| {
-        config_path.parent().map(|p| p.join("mods")).unwrap_or_else(|| PathBuf::from("mods"))
+        config_path
+            .parent()
+            .map(|p| p.join("mods"))
+            .unwrap_or_else(|| PathBuf::from("mods"))
     });
     Ok((mods_dir, config_path))
 }
@@ -53,10 +62,17 @@ fn run() -> Result<u8, String> {
     match cli.command {
         Cmd::Scan { json } => {
             if json {
-                println!("{}", serde_json::to_string_pretty(&rpt).map_err(|e| e.to_string())?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&rpt).map_err(|e| e.to_string())?
+                );
             } else {
-                println!("{} mods, {} conflicting assets, {} warnings",
-                    rpt.mods.len(), rpt.conflicts.len(), rpt.warnings.len());
+                println!(
+                    "{} mods, {} conflicting assets, {} warnings",
+                    rpt.mods.len(),
+                    rpt.conflicts.len(),
+                    rpt.warnings.len()
+                );
                 for w in &rpt.warnings {
                     println!("  warning: {w:?}");
                 }
@@ -73,7 +89,11 @@ fn run() -> Result<u8, String> {
             }
             if write {
                 config::write_order(&config_path, &rpt.proposed_order)?;
-                println!("wrote {} entries to {}", rpt.proposed_order.len(), config_path.display());
+                println!(
+                    "wrote {} entries to {}",
+                    rpt.proposed_order.len(),
+                    config_path.display()
+                );
             } else {
                 println!("dry run: {} moves proposed", rpt.moves.len());
             }

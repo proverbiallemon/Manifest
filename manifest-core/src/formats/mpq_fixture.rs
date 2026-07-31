@@ -148,7 +148,12 @@ fn build_mpq_inner(files: &[(&str, &[u8])], listfile_mode: ListfileMode) -> Vec<
         let mut i = start;
         loop {
             if hash_table[i][3] == 0xFFFF_FFFF {
-                hash_table[i] = [hash_string(&e.name, 1), hash_string(&e.name, 2), 0, block_index as u32];
+                hash_table[i] = [
+                    hash_string(&e.name, 1),
+                    hash_string(&e.name, 2),
+                    0,
+                    block_index as u32,
+                ];
                 break;
             }
             i = (i + 1) % hash_entries_count as usize;
@@ -191,7 +196,10 @@ mod tests {
 
     #[test]
     fn fixture_starts_with_mpq_magic_and_contains_data() {
-        let bytes = build_mpq(&[("alt/objects/gA", b"aaaa" as &[u8]), ("alt/objects/gB", b"bb" as &[u8])]);
+        let bytes = build_mpq(&[
+            ("alt/objects/gA", b"aaaa" as &[u8]),
+            ("alt/objects/gB", b"bb" as &[u8]),
+        ]);
         assert_eq!(&bytes[0..4], b"MPQ\x1a");
         assert!(bytes.len() > 32);
     }

@@ -18,10 +18,12 @@ struct Header {
 }
 
 fn read_u32(b: &[u8], at: usize) -> Option<u32> {
-    b.get(at..at + 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+    b.get(at..at + 4)
+        .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
 }
 fn read_u16(b: &[u8], at: usize) -> Option<u16> {
-    b.get(at..at + 2).map(|s| u16::from_le_bytes(s.try_into().unwrap()))
+    b.get(at..at + 2)
+        .map(|s| u16::from_le_bytes(s.try_into().unwrap()))
 }
 
 fn find_header(data: &[u8]) -> Result<Header, FormatError> {
@@ -39,7 +41,9 @@ fn find_header(data: &[u8]) -> Result<Header, FormatError> {
             });
         }
         offset += 512;
-        if offset == 512 && data.len() < 512 { break; }
+        if offset == 512 && data.len() < 512 {
+            break;
+        }
     }
     Err(FormatError::NotAnArchive("no MPQ header".into()))
 }
@@ -48,7 +52,13 @@ fn corrupt() -> FormatError {
     FormatError::Corrupt("truncated header".into())
 }
 
-fn read_table(data: &[u8], base: u64, offset: u32, entries: u32, key_name: &str) -> Result<Vec<[u32; 4]>, FormatError> {
+fn read_table(
+    data: &[u8],
+    base: u64,
+    offset: u32,
+    entries: u32,
+    key_name: &str,
+) -> Result<Vec<[u32; 4]>, FormatError> {
     let start = (base + offset as u64) as usize;
     let len = entries as usize * 16;
     let bytes = data
@@ -59,7 +69,10 @@ fn read_table(data: &[u8], base: u64, offset: u32, entries: u32, key_name: &str)
         .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
         .collect();
     decrypt(&mut words, hash_string(key_name, 3));
-    Ok(words.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect())
+    Ok(words
+        .chunks_exact(4)
+        .map(|c| [c[0], c[1], c[2], c[3]])
+        .collect())
 }
 
 fn find_block(hash_table: &[[u32; 4]], name: &str) -> Option<u32> {
@@ -118,7 +131,11 @@ fn read_file(data: &[u8], header: &Header, block: [u32; 4]) -> Result<Vec<u8>, F
 
     let compressed = flags & FLAG_COMPRESS != 0 && packed_size < unpacked_size;
     if flags & FLAG_SINGLE_UNIT != 0 || (!compressed && packed_size == unpacked_size) {
-        return if compressed { decompress_sector(raw) } else { Ok(raw.to_vec()) };
+        return if compressed {
+            decompress_sector(raw)
+        } else {
+            Ok(raw.to_vec())
+        };
     }
 
     // Multi-sector: leading u32 sector-offset table, one sector per
@@ -135,7 +152,10 @@ fn read_file(data: &[u8], header: &Header, block: [u32; 4]) -> Result<Vec<u8>, F
     let sector_count = (unpacked_size as usize).div_ceil(sector_size);
     let mut offsets = Vec::with_capacity(sector_count + 1);
     for i in 0..=sector_count {
-        offsets.push(read_u32(raw, i * 4).ok_or_else(|| FormatError::Corrupt("sector table".into()))? as usize);
+        offsets.push(
+            read_u32(raw, i * 4).ok_or_else(|| FormatError::Corrupt("sector table".into()))?
+                as usize,
+        );
     }
     let mut out = Vec::with_capacity(unpacked_size as usize);
     for w in offsets.windows(2) {
@@ -156,8 +176,20 @@ fn read_file(data: &[u8], header: &Header, block: [u32; 4]) -> Result<Vec<u8>, F
 pub fn list_mpq_assets(path: &Path) -> Result<Vec<String>, FormatError> {
     let data = std::fs::read(path).map_err(|e| FormatError::Io(e.to_string()))?;
     let header = find_header(&data)?;
-    let hash_table = read_table(&data, header.header_offset, header.hash_table_offset, header.hash_table_entries, "(hash table)")?;
-    let block_table = read_table(&data, header.header_offset, header.block_table_offset, header.block_table_entries, "(block table)")?;
+    let hash_table = read_table(
+        &data,
+        header.header_offset,
+        header.hash_table_offset,
+        header.hash_table_entries,
+        "(hash table)",
+    )?;
+    let block_table = read_table(
+        &data,
+        header.header_offset,
+        header.block_table_offset,
+        header.block_table_entries,
+        "(block table)",
+    )?;
     let block_index = find_block(&hash_table, "(listfile)")
         .ok_or_else(|| FormatError::Unlistable("no (listfile)".into()))?;
     let block = *block_table
@@ -181,21 +213,30 @@ pub fn list_mpq_assets(path: &Path) -> Result<Vec<String>, FormatError> {
 mod tests {
     use super::*;
     use crate::formats::mpq_crypt::encrypt;
-    use crate::formats::mpq_fixture::{build_mpq, build_mpq_with_compressed_listfile, build_mpq_with_multisector_listfile};
+    use crate::formats::mpq_fixture::{
+        build_mpq, build_mpq_with_compressed_listfile, build_mpq_with_multisector_listfile,
+    };
 
     #[test]
     fn lists_assets_from_fixture_listfile() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("fixture.otr");
-        std::fs::write(&path, build_mpq(&[
-            ("alt/objects/gSwordTex", b"aaaa"),
-            ("alt/objects/gShieldTex", b"bb"),
-        ])).unwrap();
+        std::fs::write(
+            &path,
+            build_mpq(&[
+                ("alt/objects/gSwordTex", b"aaaa"),
+                ("alt/objects/gShieldTex", b"bb"),
+            ]),
+        )
+        .unwrap();
         let assets = list_mpq_assets(&path).unwrap();
-        assert_eq!(assets, vec![
-            "alt/objects/gShieldTex".to_string(),
-            "alt/objects/gSwordTex".to_string(),
-        ]);
+        assert_eq!(
+            assets,
+            vec![
+                "alt/objects/gShieldTex".to_string(),
+                "alt/objects/gSwordTex".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -203,7 +244,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nope.otr");
         std::fs::write(&path, b"definitely not an mpq").unwrap();
-        assert!(matches!(list_mpq_assets(&path), Err(FormatError::NotAnArchive(_))));
+        assert!(matches!(
+            list_mpq_assets(&path),
+            Err(FormatError::NotAnArchive(_))
+        ));
     }
 
     #[test]
@@ -254,7 +298,10 @@ mod tests {
         }
 
         std::fs::write(&path, bytes).unwrap();
-        assert!(matches!(list_mpq_assets(&path), Err(FormatError::Unlistable(_))));
+        assert!(matches!(
+            list_mpq_assets(&path),
+            Err(FormatError::Unlistable(_))
+        ));
     }
 
     #[test]
@@ -308,7 +355,10 @@ mod tests {
         }
 
         std::fs::write(&path, bytes).unwrap();
-        assert!(matches!(list_mpq_assets(&path), Err(FormatError::Corrupt(_))));
+        assert!(matches!(
+            list_mpq_assets(&path),
+            Err(FormatError::Corrupt(_))
+        ));
     }
 
     #[test]
@@ -321,7 +371,11 @@ mod tests {
         // assertion (and read_file's packed_size < unpacked_size check)
         // both hold.
         let names: Vec<String> = (0..24)
-            .map(|i| format!("alt/objects/repeated_padding_prefix_for_zlib_compression_test/asset_{i:03}"))
+            .map(|i| {
+                format!(
+                    "alt/objects/repeated_padding_prefix_for_zlib_compression_test/asset_{i:03}"
+                )
+            })
             .collect();
         let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), b"" as &[u8])).collect();
 
@@ -342,7 +396,9 @@ mod tests {
         // listfile spans four 4096-byte sectors. Repetitive prefixes keep
         // every sector (including the short final one) zlib-compressible.
         let names: Vec<String> = (0..200)
-            .map(|i| format!("alt/objects/multisector_padding_prefix_shared_by_every_name/asset_{i:04}"))
+            .map(|i| {
+                format!("alt/objects/multisector_padding_prefix_shared_by_every_name/asset_{i:04}")
+            })
             .collect();
         let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), b"" as &[u8])).collect();
 
