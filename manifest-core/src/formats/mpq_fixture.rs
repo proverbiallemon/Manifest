@@ -121,7 +121,10 @@ fn build_mpq_inner(files: &[(&str, &[u8])], listfile_mode: ListfileMode) -> Vec<
             for s in &sectors {
                 packed.extend_from_slice(s);
             }
-            assert!(packed.len() < listfile_bytes.len(), "fixture listfile body not compressible enough for this test");
+            assert!(
+                packed.len() < listfile_bytes.len(),
+                "fixture listfile body not compressible enough for this test"
+            );
             entries.push(Entry {
                 name: "(listfile)".to_string(),
                 packed,
