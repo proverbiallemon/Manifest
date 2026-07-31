@@ -206,4 +206,18 @@ mod tests {
         std::fs::write(&path, r#"{"Window":{"Width":1920}}"#).unwrap();
         assert_eq!(read_order(&path).unwrap(), Vec::<String>::new());
     }
+
+    #[test]
+    fn write_order_preserves_nested_key_order_in_gsettings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, FULL).unwrap();
+        write_order(&path, &["B".to_string(), "A".to_string()]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let alt_idx = text.find("AltAssets").expect("AltAssets not found");
+        let mods_idx = text.find("EnabledMods").expect("EnabledMods not found");
+        let boot_idx = text.find("BootSequence").expect("BootSequence not found");
+        assert!(alt_idx < mods_idx, "AltAssets should stay before EnabledMods");
+        assert!(mods_idx < boot_idx, "EnabledMods should stay before BootSequence");
+    }
 }
