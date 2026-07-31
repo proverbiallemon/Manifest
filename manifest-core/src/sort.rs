@@ -39,6 +39,12 @@ pub fn propose(mods: &[ModFile], current: &[String], pins: &Pins) -> SortResult 
     extras.sort();
     working.extend(extras);
 
+    // Deduplicate working, keeping first occurrence (Finding 2 fix)
+    {
+        let mut seen = BTreeSet::new();
+        working.retain(|n| seen.insert(n.clone()));
+    }
+
     let is_pinned = |n: &str| pins.top.iter().any(|p| p == n) || pins.bottom.iter().any(|p| p == n);
     let index: BTreeMap<&str, usize> =
         working.iter().enumerate().map(|(i, n)| (n.as_str(), i)).collect();
@@ -107,7 +113,11 @@ pub fn propose(mods: &[ModFile], current: &[String], pins: &Pins) -> SortResult 
     };
     let mut proposed = keep_order(&pins.top);
     proposed.extend(sorted_middle);
-    proposed.extend(keep_order(&pins.bottom));
+
+    // For bottom pins, exclude any name already in proposed (Finding 1 fix: top wins)
+    let mut bottom_pins = keep_order(&pins.bottom);
+    bottom_pins.retain(|n| !proposed.iter().any(|p| p == n));
+    proposed.extend(bottom_pins);
 
     let mut moves = Vec::new();
     for (new_index, name) in proposed.iter().enumerate() {
@@ -186,5 +196,42 @@ mod tests {
         let idx = |n: &str| first.iter().position(|x| x == n).unwrap();
         assert!(idx("A") < idx("B"));
         assert!(idx("B") < idx("C"));
+    }
+
+    #[test]
+    fn pins_no_duplicates_top_wins() {
+        // Finding 1 regression test: mod listed in both top and bottom should appear exactly once at top
+        let mods = vec![mk("A", &["x"]), mk("B", &["y"])];
+        let current: Vec<String> = ["A", "B"].map(String::from).into();
+        let pins = Pins {
+            top: vec!["A".into()],
+            bottom: vec!["A".into()],
+        };
+        let result = propose(&mods, &current, &pins);
+        // Count occurrences of "A"
+        let a_count = result.proposed.iter().filter(|n| *n == "A").count();
+        assert_eq!(a_count, 1, "Mod A should appear exactly once");
+        // "A" should be first (in top)
+        assert_eq!(result.proposed[0], "A");
+        // "B" should appear exactly once
+        let b_count = result.proposed.iter().filter(|n| *n == "B").count();
+        assert_eq!(b_count, 1, "Mod B should appear exactly once");
+    }
+
+    #[test]
+    fn no_duplicates_in_current() {
+        // Finding 2 regression test: duplicates in current should be deduplicated in proposed
+        let mods = vec![mk("A", &["x"]), mk("B", &["y"])];
+        let current: Vec<String> = ["A", "A", "B"].map(String::from).into();
+        let result = propose(&mods, &current, &Pins::default());
+        // Each mod should appear exactly once
+        let a_count = result.proposed.iter().filter(|n| *n == "A").count();
+        let b_count = result.proposed.iter().filter(|n| *n == "B").count();
+        assert_eq!(a_count, 1, "Mod A should appear exactly once");
+        assert_eq!(b_count, 1, "Mod B should appear exactly once");
+        // proposed should have exactly 2 elements (A and B)
+        assert_eq!(result.proposed.len(), 2, "proposed should have exactly 2 mods");
+        // proposed should equal ["A", "B"]
+        assert_eq!(result.proposed, vec!["A".to_string(), "B".to_string()]);
     }
 }
