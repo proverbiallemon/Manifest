@@ -42,7 +42,10 @@ pub fn write_order(path: &Path, order: &[String]) -> Result<(), String> {
     let gsettings = value
         .pointer_mut("/CVars/gSettings")
         .ok_or("config has no CVars.gSettings object")?;
-    gsettings["EnabledMods"] = serde_json::Value::String(joined);
+    let obj = gsettings
+        .as_object_mut()
+        .ok_or("config CVars.gSettings is not an object")?;
+    obj.insert("EnabledMods".to_string(), serde_json::Value::String(joined));
 
     let dir = path.parent().ok_or("config path has no parent")?;
     let tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
@@ -96,5 +99,60 @@ mod tests {
         std::fs::write(&path, "{ not json").unwrap();
         assert!(write_order(&path, &["A".to_string()]).is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn write_order_sanitizes_pipes_in_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, FULL).unwrap();
+        write_order(&path, &["Bad|Name".to_string(), "Good".to_string()]).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(value["CVars"]["gSettings"]["EnabledMods"], "Bad-Name|Good");
+    }
+
+    #[test]
+    fn read_order_missing_enabledmods_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, r#"{"CVars":{"gSettings":{"AltAssets":1}}}"#).unwrap();
+        assert_eq!(read_order(&path).unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn write_order_refuses_missing_gsettings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        let original = r#"{"CVars":{}}"#;
+        std::fs::write(&path, original).unwrap();
+        assert!(write_order(&path, &["A".to_string()]).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn write_order_refuses_non_object_gsettings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        let original = r#"{"CVars":{"gSettings":"oops"}}"#;
+        std::fs::write(&path, original).unwrap();
+        assert!(write_order(&path, &["A".to_string()]).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn write_order_preserves_key_order_in_raw_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, FULL).unwrap();
+        write_order(&path, &["B".to_string(), "A".to_string()]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let config_idx = text.find("ConfigVersion").expect("ConfigVersion not found");
+        let window_idx = text.find("Window").expect("Window not found");
+        let cvars_idx = text.find("CVars").expect("CVars not found");
+        let audio_idx = text.find("Audio").expect("Audio not found");
+        assert!(config_idx < window_idx, "ConfigVersion should come before Window");
+        assert!(window_idx < cvars_idx, "Window should come before CVars");
+        assert!(cvars_idx < audio_idx, "CVars should come before Audio");
     }
 }
