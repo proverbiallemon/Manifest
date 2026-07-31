@@ -64,6 +64,11 @@ fn read_table(data: &[u8], base: u64, offset: u32, entries: u32, key_name: &str)
 
 fn find_block(hash_table: &[[u32; 4]], name: &str) -> Option<u32> {
     let count = hash_table.len() as u32;
+    if count == 0 {
+        // An empty hash table has no entries to search; treat as "not found"
+        // rather than underflowing `count - 1` below.
+        return None;
+    }
     let start = (hash_string(name, 0) & (count - 1)) as usize;
     let (a, b) = (hash_string(name, 1), hash_string(name, 2));
     let mut i = start;
@@ -117,7 +122,15 @@ fn read_file(data: &[u8], header: &Header, block: [u32; 4]) -> Result<Vec<u8>, F
     }
 
     // Multi-sector: leading u32 sector-offset table, one sector per
-    // sector_size = 512 << sector_shift bytes of unpacked data.
+    // sector_size = 512 << sector_shift bytes of unpacked data. Reject
+    // implausible shifts before computing sector_size: on 64-bit targets
+    // `512usize << shift` silently wraps to 0 once shift reaches 55 (2^9 *
+    // 2^55 == 2^64 == 0 mod 2^64), which would otherwise divide-by-zero
+    // below. Cap at a still-generous 4 GiB sector.
+    const MAX_SECTOR_SHIFT: u16 = 23;
+    if header.sector_shift > MAX_SECTOR_SHIFT {
+        return Err(FormatError::Corrupt("implausible sector shift".into()));
+    }
     let sector_size = 512usize << header.sector_shift;
     let sector_count = (unpacked_size as usize).div_ceil(sector_size);
     let mut offsets = Vec::with_capacity(sector_count + 1);
@@ -167,7 +180,7 @@ pub fn list_mpq_assets(path: &Path) -> Result<Vec<String>, FormatError> {
 mod tests {
     use super::*;
     use crate::formats::mpq_crypt::encrypt;
-    use crate::formats::mpq_fixture::build_mpq;
+    use crate::formats::mpq_fixture::{build_mpq, build_mpq_with_compressed_listfile};
 
     #[test]
     fn lists_assets_from_fixture_listfile() {
@@ -241,5 +254,81 @@ mod tests {
 
         std::fs::write(&path, bytes).unwrap();
         assert!(matches!(list_mpq_assets(&path), Err(FormatError::Unlistable(_))));
+    }
+
+    #[test]
+    fn empty_hash_table_is_err_not_panic() {
+        // Regression for finding 1: hash_table_entries = 0 must not panic
+        // `find_block`'s `count - 1` mask computation (debug: subtract
+        // overflow; release: wraps to u32::MAX and indexes out of bounds).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty_hash.otr");
+        let mut bytes = build_mpq(&[("alt/gA", b"a")]);
+        // hash_table_entries is the u32 at header offset 24.
+        bytes[24..28].copy_from_slice(&0u32.to_le_bytes());
+        std::fs::write(&path, bytes).unwrap();
+        assert!(list_mpq_assets(&path).is_err());
+    }
+
+    #[test]
+    fn implausible_sector_shift_is_corrupt_not_panic() {
+        // Regression for finding 2: a huge sector_shift must not divide by
+        // zero in `read_file` (512usize << shift wraps to 0 once shift
+        // reaches 55 on a 64-bit target, per LLVM's masked-shift semantics).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad_shift.otr");
+        let mut bytes = build_mpq(&[("alt/gA", b"aaaaaa")]);
+
+        // sector_shift is the u16 at header offset 14.
+        bytes[14..16].copy_from_slice(&0xFFFFu16.to_le_bytes());
+
+        // Force the (listfile) block off the single-unit fast path so
+        // read_file reaches the multi-sector code that derives sector_size
+        // from sector_shift. The fixture writes (listfile) as the last
+        // block entry with packed_size == unpacked_size and
+        // FLAG_SINGLE_UNIT set; clear the flag and make packed != unpacked
+        // so neither shortcut condition holds.
+        let header = find_header(&bytes).unwrap();
+        let block_start = (header.header_offset + header.block_table_offset as u64) as usize;
+        let block_len = header.block_table_entries as usize * 16;
+        let mut words: Vec<u32> = bytes[block_start..block_start + block_len]
+            .chunks_exact(4)
+            .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+            .collect();
+        decrypt(&mut words, hash_string("(block table)", 3));
+
+        let last = words.len() - 4; // (listfile) is always the last entry
+        words[last + 1] -= 1; // packed_size != unpacked_size
+        words[last + 3] &= !FLAG_SINGLE_UNIT;
+
+        encrypt(&mut words, hash_string("(block table)", 3));
+        for (i, w) in words.iter().enumerate() {
+            bytes[block_start + i * 4..block_start + i * 4 + 4].copy_from_slice(&w.to_le_bytes());
+        }
+
+        std::fs::write(&path, bytes).unwrap();
+        assert!(matches!(list_mpq_assets(&path), Err(FormatError::Corrupt(_))));
+    }
+
+    #[test]
+    fn zlib_compressed_listfile_decodes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("compressed.otr");
+
+        // Enough repetitive names that zlib comfortably shrinks the listfile
+        // body below its original size, so the fixture's compressibility
+        // assertion (and read_file's packed_size < unpacked_size check)
+        // both hold.
+        let names: Vec<String> = (0..24)
+            .map(|i| format!("alt/objects/repeated_padding_prefix_for_zlib_compression_test/asset_{i:03}"))
+            .collect();
+        let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), b"" as &[u8])).collect();
+
+        std::fs::write(&path, build_mpq_with_compressed_listfile(&files)).unwrap();
+
+        let mut expected = names;
+        expected.sort();
+        expected.dedup();
+        assert_eq!(list_mpq_assets(&path).unwrap(), expected);
     }
 }
