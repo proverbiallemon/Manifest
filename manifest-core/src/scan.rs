@@ -15,9 +15,8 @@ fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn folder_gamebanana_id(path: &Path) -> Option<u64> {
-    let sidecar = path.parent()?.join(".sailswift.json");
-    let text = std::fs::read_to_string(sidecar).ok()?;
+fn folder_gamebanana_id(folder: &Path) -> Option<u64> {
+    let text = std::fs::read_to_string(folder.join(".sailswift.json")).ok()?;
     let value: serde_json::Value = serde_json::from_str(&text).ok()?;
     value.get("gameBananaModId")?.as_u64()
 }
@@ -25,6 +24,19 @@ fn folder_gamebanana_id(path: &Path) -> Option<u64> {
 pub fn scan_library(mods_dir: &Path) -> Vec<ModFile> {
     let mut files = Vec::new();
     collect_files(mods_dir, &mut files);
+
+    // Read each folder's .sailswift.json once, not once per file in it.
+    let folders: std::collections::BTreeSet<PathBuf> = files
+        .iter()
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        .collect();
+    let folder_ids: std::collections::BTreeMap<PathBuf, Option<u64>> = folders
+        .into_iter()
+        .map(|f| {
+            let id = folder_gamebanana_id(&f);
+            (f, id)
+        })
+        .collect();
 
     let mut mods: Vec<ModFile> = files
         .par_iter()
@@ -49,7 +61,11 @@ pub fn scan_library(mods_dir: &Path) -> Vec<ModFile> {
                 enabled,
                 assets,
                 error,
-                gamebanana_mod_id: folder_gamebanana_id(path),
+                gamebanana_mod_id: path
+                    .parent()
+                    .and_then(|p| folder_ids.get(p))
+                    .copied()
+                    .flatten(),
             })
         })
         .collect();
