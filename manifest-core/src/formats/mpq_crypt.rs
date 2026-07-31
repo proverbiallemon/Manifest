@@ -26,7 +26,7 @@ pub fn hash_string(s: &str, hash_type: u32) -> u32 {
     let mut seed2: u32 = 0xEEEE_EEEE;
     for ch in s.chars() {
         let ch = if ch == '/' { '\\' } else { ch };
-        let ch = ch.to_ascii_uppercase() as u32;
+        let ch = (ch.to_ascii_uppercase() as u32) & 0xFF;
         seed1 = table[(hash_type * 256 + ch) as usize] ^ seed1.wrapping_add(seed2);
         seed2 = ch
             .wrapping_add(seed1)
@@ -79,6 +79,20 @@ mod tests {
         // hash_string is case-insensitive (uppercases) and treats '/' as '\\'.
         assert_eq!(hash_string("(hash table)", 3), 0xC3AF3770);
         assert_eq!(hash_string("(block table)", 3), 0xEC83B3A3);
+    }
+
+    #[test]
+    fn hash_string_non_ascii_does_not_panic() {
+        // Regression for the merge-gate finding: `char as u32` for chars
+        // >= U+0200 previously indexed `table[hash_type * 256 + ch]` out of
+        // bounds once ch exceeded 255, since to_ascii_uppercase() is a no-op
+        // on non-ASCII input. Masking to a byte (matching StormLib's
+        // byte-oriented treatment) must keep every hash_type in range.
+        for hash_type in 0..4u32 {
+            let _ = hash_string("Ā☃𐍈", hash_type);
+        }
+        // Known ASCII value must be unaffected by the byte mask.
+        assert_eq!(hash_string("(hash table)", 3), 0xC3AF3770);
     }
 
     #[test]

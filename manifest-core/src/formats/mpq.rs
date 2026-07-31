@@ -142,13 +142,14 @@ fn read_file(data: &[u8], header: &Header, block: [u32; 4]) -> Result<Vec<u8>, F
         let sector = raw
             .get(w[0]..w[1])
             .ok_or_else(|| FormatError::Corrupt("sector out of range".into()))?;
-        let remaining = unpacked_size as usize - out.len();
+        let remaining = (unpacked_size as usize).saturating_sub(out.len());
         if compressed && sector.len() < remaining.min(sector_size) {
             out.extend(decompress_sector(sector)?);
         } else {
             out.extend_from_slice(sector);
         }
     }
+    out.truncate(unpacked_size as usize);
     Ok(out)
 }
 

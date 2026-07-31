@@ -93,6 +93,6 @@ mod tests {
         assert_eq!(json["conflicts"][0]["winner"], "Big");
         assert_eq!(json["proposed_order"][0], "Big");
         assert_eq!(json["proposed_order"][1], "Small");
-        assert!(json["moves"].as_array().unwrap().len() >= 1);
+        assert!(!json["moves"].as_array().unwrap().is_empty());
     }
 }
