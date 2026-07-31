@@ -109,17 +109,22 @@ mod tests {
 
     #[test]
     fn report_marks_pinned_mods_and_ignores_stale_pins() {
-        let mods = vec![mk("Small", &["a"]), mk("Big", &["a", "b"])];
-        let order: Vec<String> = ["Small", "Big"].map(String::from).into();
+        let mods = vec![
+            mk("Small", &["a"]),
+            mk("Big", &["a", "b"]),
+            mk("Tiny", &["z"]),
+        ];
+        let order: Vec<String> = ["Small", "Big", "Tiny"].map(String::from).into();
         let pins = Pins {
             top: vec!["Small".to_string()],
-            bottom: vec!["Ghost".to_string()],
+            bottom: vec!["Tiny".to_string(), "Ghost".to_string()],
         };
         let report = build(&mods, &order, &pins);
         let json = serde_json::to_value(&report).unwrap();
         assert_eq!(json["schema_version"], 2);
         assert_eq!(json["mods"][0]["pinned"], "top");
         assert_eq!(json["mods"][1]["pinned"], serde_json::Value::Null);
+        assert_eq!(json["mods"][2]["pinned"], "bottom");
         // Pinned mod holds the top despite the specificity heuristic.
         assert_eq!(json["proposed_order"][0], "Small");
         // A pin naming a mod that does not exist never enters the order.
