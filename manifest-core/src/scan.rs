@@ -82,6 +82,7 @@ mod tests {
         std::fs::write(folder.join("Sword.otr"), build_mpq(&[("alt/gA", b"a")])).unwrap();
         write_zip(&folder.join("Shield.o2r"), &["alt/gB"]);
         write_zip(&folder.join("Parked.di2abled"), &["alt/gC"]);
+        std::fs::write(folder.join("Benched.disabled"), build_mpq(&[("alt/gD", b"d")])).unwrap();
         std::fs::write(folder.join("Broken.otr"), b"garbage").unwrap();
         std::fs::write(
             folder.join(".sailswift.json"),
@@ -89,14 +90,35 @@ mod tests {
         ).unwrap();
 
         let mods = scan_library(dir.path());
-        assert_eq!(mods.len(), 4);
+        assert_eq!(mods.len(), 5);
         let by_name: std::collections::HashMap<_, _> =
             mods.iter().map(|m| (m.name.clone(), m)).collect();
         assert!(by_name["Sword"].enabled);
         assert_eq!(by_name["Sword"].assets.len(), 1);
         assert_eq!(by_name["Sword"].gamebanana_mod_id, Some(123));
         assert!(!by_name["Parked"].enabled);
+        assert!(!by_name["Benched"].enabled);
+        assert_eq!(by_name["Benched"].assets.len(), 1, "disabled MPQ must still list assets");
+        assert!(by_name["Benched"].error.is_none());
         assert!(by_name["Broken"].error.is_some());
         assert!(by_name["Broken"].assets.is_empty());
+    }
+
+    #[test]
+    fn scan_output_is_sorted_by_path() {
+        let dir = tempfile::tempdir().unwrap();
+        // Create in an order that differs from path order to prove the sort.
+        for folder in ["Zeta Pack", "Alpha Pack", "Mid Pack"] {
+            let f = dir.path().join(folder);
+            std::fs::create_dir(&f).unwrap();
+            write_zip(&f.join("b.o2r"), &["x"]);
+            write_zip(&f.join("a.o2r"), &["y"]);
+        }
+        let mods = scan_library(dir.path());
+        let paths: Vec<_> = mods.iter().map(|m| m.path.clone()).collect();
+        let mut sorted = paths.clone();
+        sorted.sort();
+        assert_eq!(paths, sorted, "scan_library must return path-sorted results");
+        assert_eq!(mods.len(), 6);
     }
 }
