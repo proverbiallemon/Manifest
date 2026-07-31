@@ -1,5 +1,8 @@
 use std::path::Path;
 
+pub mod mpq_crypt;
+pub mod mpq;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormatError {
     Io(String),
