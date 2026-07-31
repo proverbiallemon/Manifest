@@ -121,7 +121,7 @@ fn build_mpq_inner(files: &[(&str, &[u8])], listfile_mode: ListfileMode) -> Vec<
             for s in &sectors {
                 packed.extend_from_slice(s);
             }
-            assert!(packed.len() < listfile_bytes.len());
+            assert!(packed.len() < listfile_bytes.len(), "fixture listfile body not compressible enough for this test");
             entries.push(Entry {
                 name: "(listfile)".to_string(),
                 packed,
@@ -170,7 +170,7 @@ fn build_mpq_inner(files: &[(&str, &[u8])], listfile_mode: ListfileMode) -> Vec<
     out.extend_from_slice(&header_size.to_le_bytes());
     out.extend_from_slice(&archive_size.to_le_bytes());
     out.extend_from_slice(&0u16.to_le_bytes()); // format version 0
-    out.extend_from_slice(&3u16.to_le_bytes()); // sector size shift (unused: single unit)
+    out.extend_from_slice(&3u16.to_le_bytes()); // sector size shift: 512 << 3 = 4096, must match SECTOR_SIZE
     out.extend_from_slice(&hash_table_offset.to_le_bytes());
     out.extend_from_slice(&block_table_offset.to_le_bytes());
     out.extend_from_slice(&hash_entries_count.to_le_bytes());
