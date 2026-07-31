@@ -4,8 +4,17 @@ const FLAG_EXISTS: u32 = 0x8000_0000;
 const FLAG_SINGLE_UNIT: u32 = 0x0100_0000;
 const FLAG_COMPRESS: u32 = 0x0000_0200;
 
+/// Matches the sector_shift of 3 written into the fixture header below.
+const SECTOR_SIZE: usize = 512 << 3;
+
+enum ListfileMode {
+    Plain,
+    CompressedSingleUnit,
+    CompressedMultiSector,
+}
+
 pub fn build_mpq(files: &[(&str, &[u8])]) -> Vec<u8> {
-    build_mpq_inner(files, false)
+    build_mpq_inner(files, ListfileMode::Plain)
 }
 
 /// Like [`build_mpq`], but the `(listfile)` entry is written zlib-compressed:
@@ -13,7 +22,16 @@ pub fn build_mpq(files: &[(&str, &[u8])]) -> Vec<u8> {
 /// set on the block entry, and `packed_size < unpacked_size`. Lets tests
 /// exercise the zlib decompression path in `read_file`/`decompress_sector`.
 pub fn build_mpq_with_compressed_listfile(files: &[(&str, &[u8])]) -> Vec<u8> {
-    build_mpq_inner(files, true)
+    build_mpq_inner(files, ListfileMode::CompressedSingleUnit)
+}
+
+/// Like [`build_mpq`], but the `(listfile)` is a true multi-sector compressed
+/// file: a leading u32 sector-offset table followed by one zlib sector per
+/// 4096 bytes of unpacked data, `FLAG_COMPRESS` set, `FLAG_SINGLE_UNIT`
+/// clear. Exercises the sector loop in `read_file`. Panics unless the
+/// listfile body spans at least two sectors.
+pub fn build_mpq_with_multisector_listfile(files: &[(&str, &[u8])]) -> Vec<u8> {
+    build_mpq_inner(files, ListfileMode::CompressedMultiSector)
 }
 
 struct Entry {
@@ -23,7 +41,18 @@ struct Entry {
     flags: u32,
 }
 
-fn build_mpq_inner(files: &[(&str, &[u8])], compress_listfile: bool) -> Vec<u8> {
+fn zlib_sector(chunk: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(chunk).unwrap();
+    let compressed = encoder.finish().unwrap();
+    let mut packed = Vec::with_capacity(compressed.len() + 1);
+    packed.push(0x02);
+    packed.extend_from_slice(&compressed);
+    packed
+}
+
+fn build_mpq_inner(files: &[(&str, &[u8])], listfile_mode: ListfileMode) -> Vec<u8> {
     let listfile_body: String = files
         .iter()
         .map(|(n, _)| n.replace('/', "\\"))
@@ -41,32 +70,65 @@ fn build_mpq_inner(files: &[(&str, &[u8])], compress_listfile: bool) -> Vec<u8> 
         })
         .collect();
 
-    if compress_listfile {
-        use std::io::Write;
-        let mut encoder =
-            flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
-        encoder.write_all(&listfile_bytes).unwrap();
-        let compressed = encoder.finish().unwrap();
-        let mut packed = Vec::with_capacity(compressed.len() + 1);
-        packed.push(0x02);
-        packed.extend_from_slice(&compressed);
-        assert!(
-            packed.len() < listfile_bytes.len(),
-            "fixture listfile body not compressible enough for this test"
-        );
-        entries.push(Entry {
-            name: "(listfile)".to_string(),
-            packed,
-            unpacked_size: listfile_bytes.len() as u32,
-            flags: FLAG_EXISTS | FLAG_SINGLE_UNIT | FLAG_COMPRESS,
-        });
-    } else {
-        entries.push(Entry {
-            name: "(listfile)".to_string(),
-            unpacked_size: listfile_bytes.len() as u32,
-            packed: listfile_bytes,
-            flags: FLAG_EXISTS | FLAG_SINGLE_UNIT,
-        });
+    match listfile_mode {
+        ListfileMode::Plain => {
+            entries.push(Entry {
+                name: "(listfile)".to_string(),
+                unpacked_size: listfile_bytes.len() as u32,
+                packed: listfile_bytes,
+                flags: FLAG_EXISTS | FLAG_SINGLE_UNIT,
+            });
+        }
+        ListfileMode::CompressedSingleUnit => {
+            let packed = zlib_sector(&listfile_bytes);
+            assert!(
+                packed.len() < listfile_bytes.len(),
+                "fixture listfile body not compressible enough for this test"
+            );
+            entries.push(Entry {
+                name: "(listfile)".to_string(),
+                packed,
+                unpacked_size: listfile_bytes.len() as u32,
+                flags: FLAG_EXISTS | FLAG_SINGLE_UNIT | FLAG_COMPRESS,
+            });
+        }
+        ListfileMode::CompressedMultiSector => {
+            assert!(
+                listfile_bytes.len() > SECTOR_SIZE,
+                "multi-sector fixture needs a listfile body over {SECTOR_SIZE} bytes, got {}",
+                listfile_bytes.len()
+            );
+            let sectors: Vec<Vec<u8>> = listfile_bytes
+                .chunks(SECTOR_SIZE)
+                .map(|chunk| {
+                    let packed = zlib_sector(chunk);
+                    assert!(
+                        packed.len() < chunk.len(),
+                        "fixture sector not compressible enough for this test"
+                    );
+                    packed
+                })
+                .collect();
+            let table_len = 4 * (sectors.len() + 1);
+            let mut offsets: Vec<u32> = vec![table_len as u32];
+            for s in &sectors {
+                offsets.push(offsets.last().unwrap() + s.len() as u32);
+            }
+            let mut packed = Vec::new();
+            for o in &offsets {
+                packed.extend_from_slice(&o.to_le_bytes());
+            }
+            for s in &sectors {
+                packed.extend_from_slice(s);
+            }
+            assert!(packed.len() < listfile_bytes.len());
+            entries.push(Entry {
+                name: "(listfile)".to_string(),
+                packed,
+                unpacked_size: listfile_bytes.len() as u32,
+                flags: FLAG_EXISTS | FLAG_COMPRESS,
+            });
+        }
     }
 
     let header_size: u32 = 32;
@@ -102,7 +164,7 @@ fn build_mpq_inner(files: &[(&str, &[u8])], compress_listfile: bool) -> Vec<u8> 
     out.extend_from_slice(b"MPQ\x1a");
     out.extend_from_slice(&header_size.to_le_bytes());
     out.extend_from_slice(&archive_size.to_le_bytes());
-    out.extend_from_slice(&0u16.to_le_bytes()); // format version 1
+    out.extend_from_slice(&0u16.to_le_bytes()); // format version 0
     out.extend_from_slice(&3u16.to_le_bytes()); // sector size shift (unused: single unit)
     out.extend_from_slice(&hash_table_offset.to_le_bytes());
     out.extend_from_slice(&block_table_offset.to_le_bytes());

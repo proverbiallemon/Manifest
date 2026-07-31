@@ -181,7 +181,7 @@ pub fn list_mpq_assets(path: &Path) -> Result<Vec<String>, FormatError> {
 mod tests {
     use super::*;
     use crate::formats::mpq_crypt::encrypt;
-    use crate::formats::mpq_fixture::{build_mpq, build_mpq_with_compressed_listfile};
+    use crate::formats::mpq_fixture::{build_mpq, build_mpq_with_compressed_listfile, build_mpq_with_multisector_listfile};
 
     #[test]
     fn lists_assets_from_fixture_listfile() {
@@ -326,6 +326,27 @@ mod tests {
         let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), b"" as &[u8])).collect();
 
         std::fs::write(&path, build_mpq_with_compressed_listfile(&files)).unwrap();
+
+        let mut expected = names;
+        expected.sort();
+        expected.dedup();
+        assert_eq!(list_mpq_assets(&path).unwrap(), expected);
+    }
+
+    #[test]
+    fn multisector_zlib_listfile_decodes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("multisector.otr");
+
+        // ~70 bytes per name times 200 names is ~14 KB unpacked, so the
+        // listfile spans four 4096-byte sectors. Repetitive prefixes keep
+        // every sector (including the short final one) zlib-compressible.
+        let names: Vec<String> = (0..200)
+            .map(|i| format!("alt/objects/multisector_padding_prefix_shared_by_every_name/asset_{i:04}"))
+            .collect();
+        let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), b"" as &[u8])).collect();
+
+        std::fs::write(&path, build_mpq_with_multisector_listfile(&files)).unwrap();
 
         let mut expected = names;
         expected.sort();
