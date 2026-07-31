@@ -23,11 +23,18 @@ pub fn default_config_path() -> Option<PathBuf> {
 pub fn read_order(path: &Path) -> Result<Vec<String>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    Ok(value
-        .pointer("/CVars/gSettings/EnabledMods")
-        .and_then(|v| v.as_str())
-        .map(|s| s.split('|').filter(|p| !p.is_empty()).map(String::from).collect())
-        .unwrap_or_default())
+    let root = value.as_object().ok_or("config root is not a JSON object")?;
+    let Some(cvars) = root.get("CVars") else { return Ok(Vec::new()) };
+    let cvars = cvars.as_object().ok_or("config CVars is not an object")?;
+    let Some(gsettings) = cvars.get("gSettings") else { return Ok(Vec::new()) };
+    let gsettings = gsettings.as_object().ok_or("config CVars.gSettings is not an object")?;
+    match gsettings.get("EnabledMods") {
+        None => Ok(Vec::new()),
+        Some(serde_json::Value::String(s)) => {
+            Ok(s.split('|').filter(|p| !p.is_empty()).map(String::from).collect())
+        }
+        Some(_) => Err("config CVars.gSettings.EnabledMods is not a string".into()),
+    }
 }
 
 pub fn write_order(path: &Path, order: &[String]) -> Result<(), String> {
@@ -154,5 +161,49 @@ mod tests {
         assert!(config_idx < window_idx, "ConfigVersion should come before Window");
         assert!(window_idx < cvars_idx, "Window should come before CVars");
         assert!(cvars_idx < audio_idx, "CVars should come before Audio");
+    }
+
+    #[test]
+    fn read_order_rejects_non_object_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, r#"[1, 2, 3]"#).unwrap();
+        let err = read_order(&path).unwrap_err();
+        assert!(err.contains("root"), "error should name the root: {err}");
+    }
+
+    #[test]
+    fn read_order_rejects_non_object_cvars() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, r#"{"CVars": "oops"}"#).unwrap();
+        let err = read_order(&path).unwrap_err();
+        assert!(err.contains("CVars"), "error should name CVars: {err}");
+    }
+
+    #[test]
+    fn read_order_rejects_non_object_gsettings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, r#"{"CVars":{"gSettings": 7}}"#).unwrap();
+        let err = read_order(&path).unwrap_err();
+        assert!(err.contains("gSettings"), "error should name gSettings: {err}");
+    }
+
+    #[test]
+    fn read_order_rejects_non_string_enabledmods() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, r#"{"CVars":{"gSettings":{"EnabledMods": 42}}}"#).unwrap();
+        let err = read_order(&path).unwrap_err();
+        assert!(err.contains("EnabledMods"), "error should name EnabledMods: {err}");
+    }
+
+    #[test]
+    fn read_order_missing_cvars_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shipofharkinian.json");
+        std::fs::write(&path, r#"{"Window":{"Width":1920}}"#).unwrap();
+        assert_eq!(read_order(&path).unwrap(), Vec::<String>::new());
     }
 }
