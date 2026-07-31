@@ -4,6 +4,8 @@ pub mod mpq_crypt;
 pub mod mpq;
 #[cfg(test)] pub mod mpq_fixture;
 
+pub use mpq::list_mpq_assets;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormatError {
     Io(String),
