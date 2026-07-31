@@ -185,7 +185,8 @@ mod tests {
         let path = dir.path().join("shipofharkinian.json");
         let original = r#"{}"#;
         std::fs::write(&path, original).unwrap();
-        assert!(write_order(&path, &["A".to_string()]).is_err());
+        let err = write_order(&path, &["A".to_string()]).unwrap_err();
+        assert!(err.contains("CVars"), "error should name CVars: {err}");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
     }
 
