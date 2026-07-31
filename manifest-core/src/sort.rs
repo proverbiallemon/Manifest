@@ -132,7 +132,7 @@ pub fn propose(mods: &[ModFile], current: &[String], pins: &Pins) -> SortResult 
                 Some((other, mine, theirs)) => format!(
                     "moved after {other}: its {mine} assets overlap {other}'s {theirs} and the more specific mod wins"
                 ),
-                None => "position shifted by other moves".to_string(),
+                None => "repositioned to preserve relative order after conflict-driven moves".to_string(),
             };
             moves.push(Move {
                 name: name.clone(),
