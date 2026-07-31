@@ -1,0 +1,13 @@
+[package]
+name = "manifest-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "manifest"
+path = "src/main.rs"
+
+[dependencies]
+manifest-core = { path = "../manifest-core" }
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"

@@ -1,0 +1,3 @@
+[workspace]
+members = ["manifest-core", "manifest-cli"]
+resolver = "2"
