@@ -31,6 +31,24 @@ Exit codes: 0 clean, 3 conflicts or warnings found, 1 error.
 
 Paths are auto-detected per platform; override with `--config` and `--mods-dir`.
 
+## Pins
+
+Pins let you override the sorter for specific mods. Create
+`manifest-pins.json` next to `shipofharkinian.json`:
+
+```json
+{
+  "schema_version": 1,
+  "top": ["SomeOverhaul"],
+  "bottom": ["MyFavoriteSkin"]
+}
+```
+
+Mods in `top` load first; mods in `bottom` load last, and later always wins.
+Pinned mods are never reordered by the heuristics. Pin names that do not
+match an installed mod are ignored. Every command picks the file up
+automatically; there is nothing to enable.
+
 ## Safety
 
 Mod archives are treated as untrusted input throughout: every read is bounds-checked and malformed files produce typed errors, never crashes. Config writes are atomic, modify only the `EnabledMods` entry, and are refused entirely if the existing config cannot be parsed. Manifest never modifies mod files themselves.
