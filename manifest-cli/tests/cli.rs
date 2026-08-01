@@ -146,3 +146,51 @@ fn sort_dry_run_proposes_without_writing() {
         "dry run must not write"
     );
 }
+
+#[test]
+fn pins_file_beside_config_overrides_sort_heuristics() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mods, config) = fixture(dir.path());
+    std::fs::write(
+        dir.path().join("manifest-pins.json"),
+        r#"{"schema_version":1,"top":["Small"],"bottom":[]}"#,
+    )
+    .unwrap();
+    let output = Command::cargo_bin("manifest")
+        .unwrap()
+        .args(["scan", "--json"])
+        .args(["--mods-dir", mods.to_str().unwrap()])
+        .args(["--config", config.to_str().unwrap()])
+        .assert()
+        .code(3);
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    // Without pins the specificity heuristic puts Big first; the pin wins.
+    assert_eq!(json["proposed_order"][0], "Small");
+    let small = json["mods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["name"] == "Small")
+        .unwrap();
+    assert_eq!(small["pinned"], "top");
+}
+
+#[test]
+fn wrong_shaped_pins_file_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mods, config) = fixture(dir.path());
+    std::fs::write(dir.path().join("manifest-pins.json"), r#"{"top":"Small"}"#).unwrap();
+    let output = Command::cargo_bin("manifest")
+        .unwrap()
+        .args(["scan"])
+        .args(["--mods-dir", mods.to_str().unwrap()])
+        .args(["--config", config.to_str().unwrap()])
+        .assert()
+        .code(1);
+    let stderr = String::from_utf8(output.get_output().stderr.clone()).unwrap();
+    assert!(
+        stderr.contains("top"),
+        "stderr should name the bad key: {stderr}"
+    );
+}
