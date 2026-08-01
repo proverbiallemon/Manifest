@@ -1,7 +1,7 @@
 use crate::model::ModFile;
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Pins {
     pub top: Vec<String>,
     pub bottom: Vec<String>,

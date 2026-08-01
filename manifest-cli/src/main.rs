@@ -1,5 +1,5 @@
 use clap::{ArgGroup, Parser, Subcommand};
-use manifest_core::{config, report, scan::scan_library, sort::Pins};
+use manifest_core::{config, pins, report, scan::scan_library};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -56,7 +56,8 @@ fn run() -> Result<u8, String> {
     let (mods_dir, config_path) = resolve_paths(&cli)?;
     let mods = scan_library(&mods_dir);
     let order = config::read_order(&config_path)?;
-    let rpt = report::build(&mods, &order, &Pins::default());
+    let pin_rules = pins::read_pins(&pins::default_pins_path(&config_path))?;
+    let rpt = report::build(&mods, &order, &pin_rules);
     let has_conflicts = !rpt.conflicts.is_empty() || !rpt.warnings.is_empty();
 
     match cli.command {

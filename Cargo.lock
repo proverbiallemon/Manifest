@@ -322,7 +322,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "manifest-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "manifest-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "rayon",

@@ -2,6 +2,7 @@ pub mod config;
 pub mod conflicts;
 pub mod formats;
 pub mod model;
+pub mod pins;
 pub mod report;
 pub mod scan;
 pub mod sort;
