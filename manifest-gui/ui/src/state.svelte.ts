@@ -1,0 +1,18 @@
+import type { Report } from "./types";
+
+export const appState = $state({
+  report: null as Report | null,
+  configPath: null as string | null,
+  modsDir: null as string | null,
+  loading: false,
+  error: null as string | null,
+});
+
+export function setReport(report: Report) {
+  appState.report = report;
+  appState.error = null;
+}
+
+export function setError(message: string) {
+  appState.error = message;
+}
