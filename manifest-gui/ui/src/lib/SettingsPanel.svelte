@@ -3,7 +3,13 @@
   import { t } from "../copy.svelte";
 
   let { open, onClose }: { open: boolean; onClose: () => void } = $props();
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (open && e.key === "Escape") onClose();
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 {#if open}
   <div class="paper-slip panel" role="dialog" aria-label="settings">
@@ -15,19 +21,19 @@
         class:active={appState.voice === "ship"}
         onclick={() => setVoice("ship")}
       >
-        {appState.voice === "ship" ? ">" : " "} manifest voice (ship terms)
+        {appState.voice === "ship" ? ">" : " "} {t("voiceShip")}
       </button>
       <button
         class="option"
         class:active={appState.voice === "plain"}
         onclick={() => setVoice("plain")}
       >
-        {appState.voice === "plain" ? ">" : " "} plain language
+        {appState.voice === "plain" ? ">" : " "} {t("voicePlain")}
       </button>
     </div>
     <hr class="ledger-rule" />
     <div class="close-row">
-      <button onclick={onClose}>done</button>
+      <button onclick={onClose}>{t("done")}</button>
     </div>
   </div>
 {/if}

@@ -30,9 +30,9 @@
   <div class="masthead">MANIFEST</div>
   <hr class="ledger-rule double" />
   <div class="bar">
-    <button class="pathbtn faded" onclick={() => (pathShown = !pathShown)} title={configPath ?? "no config"}>
+    <button class="pathbtn faded" onclick={() => (pathShown = !pathShown)} title={configPath ?? t("noConfigShort")}>
       {#if configPath}
-        {pathShown ? configPath : "reading: ..." + configPath.slice(-28)}
+        {pathShown ? configPath : t("reading") + "..." + configPath.slice(-28)}
       {:else}
         {t("noConfig")}
       {/if}

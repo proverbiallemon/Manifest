@@ -42,6 +42,11 @@ const STRINGS = {
   unlistableHeadline: { ship: "could not be inventoried", plain: "could not be read" },
   duplicateHeadline: { ship: "are the same shipment twice", plain: "are the same mod installed twice" },
   duplicateGuidance: { ship: "consider removing the extra copy", plain: "consider removing the extra copy" },
+  voiceShip: { ship: "manifest voice (ship terms)", plain: "manifest voice (ship terms)" },
+  voicePlain: { ship: "plain language", plain: "plain language" },
+  done: { ship: "done", plain: "done" },
+  reading: { ship: "reading: ", plain: "reading: " },
+  noConfigShort: { ship: "no config", plain: "no config" },
 } as const;
 
 export type CopyKey = keyof typeof STRINGS;

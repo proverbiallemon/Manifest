@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ReportMod } from "../types";
+  import { t } from "../copy.svelte";
   import sealUrl from "../assets/seal.png";
   import glyphUrl from "../assets/glyph-error.png";
 
@@ -43,7 +44,7 @@
     {:else if conflicts > 0}
       <span class="stamp">CONFLICT</span>
     {:else}
-      <span class="faded">clear</span>
+      <span class="faded">{t("clearStatus")}</span>
     {/if}
   </span>
   <span class="pins">
