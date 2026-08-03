@@ -211,7 +211,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (config, mods) = fixture(dir.path());
         let report = scan_paths(&config, &mods).unwrap();
-        assert_eq!(report.schema_version, 2);
+        assert_eq!(report.schema_version, 3);
         assert_eq!(report.mods.len(), 2);
         assert_eq!(
             report.proposed_order.first().map(String::as_str),

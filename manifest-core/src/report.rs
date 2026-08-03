@@ -3,11 +3,12 @@ use crate::model::ModFile;
 use crate::sort::{propose, Move, Pins};
 use crate::warnings::{detect, Warning};
 
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, serde::Serialize)]
 pub struct ReportMod {
     pub name: String,
+    pub path: String,
     pub enabled: bool,
     pub asset_count: usize,
     pub error: Option<String>,
@@ -51,6 +52,7 @@ pub fn build(mods: &[ModFile], order: &[String], pins: &Pins) -> Report {
             .iter()
             .map(|m| ReportMod {
                 name: m.name.clone(),
+                path: m.path.to_string_lossy().to_string(),
                 enabled: m.enabled,
                 asset_count: m.assets.len(),
                 error: m.error.clone(),
@@ -98,7 +100,7 @@ mod tests {
         let order: Vec<String> = ["Small", "Big"].map(String::from).into();
         let report = build(&mods, &order, &Pins::default());
         let json = serde_json::to_value(&report).unwrap();
-        assert_eq!(json["schema_version"], 2);
+        assert_eq!(json["schema_version"], 3);
         assert_eq!(json["mods"].as_array().unwrap().len(), 2);
         assert_eq!(json["conflicts"][0]["asset"], "a");
         assert_eq!(json["conflicts"][0]["winner"], "Big");
@@ -121,7 +123,7 @@ mod tests {
         };
         let report = build(&mods, &order, &pins);
         let json = serde_json::to_value(&report).unwrap();
-        assert_eq!(json["schema_version"], 2);
+        assert_eq!(json["schema_version"], 3);
         assert_eq!(json["mods"][0]["pinned"], "top");
         assert_eq!(json["mods"][1]["pinned"], serde_json::Value::Null);
         assert_eq!(json["mods"][2]["pinned"], "bottom");
@@ -129,5 +131,15 @@ mod tests {
         assert_eq!(json["proposed_order"][0], "Small");
         // A pin naming a mod that does not exist never enters the order.
         assert!(report.proposed_order.iter().all(|n| n != "Ghost"));
+    }
+
+    #[test]
+    fn report_mods_carry_their_file_paths() {
+        let mods = vec![mk("Small", &["a"])];
+        let order: Vec<String> = ["Small"].map(String::from).into();
+        let report = build(&mods, &order, &Pins::default());
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["schema_version"], 3);
+        assert_eq!(json["mods"][0]["path"], "/tmp/Small.otr");
     }
 }
