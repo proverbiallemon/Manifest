@@ -65,6 +65,7 @@
       modalOpen = false;
     } catch (e) {
       setError(String(e));
+      modalOpen = false;
     } finally {
       appState.loading = false;
     }
@@ -132,7 +133,7 @@
     </section>
   {/if}
 
-  {#if modalOpen && appState.report}
+  {#if modalOpen && appState.report && !appState.error}
     <SortModal
       report={appState.report}
       busy={appState.loading}
