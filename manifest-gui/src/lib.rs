@@ -41,6 +41,9 @@ fn scan_paths(config_path: &Path, mods_dir: &Path) -> Result<Report, String> {
             mods_dir.display()
         )
     };
+    if !mods_dir.is_dir() {
+        return Err(context("mods directory not found".to_string()));
+    }
     let mods = scan_library(mods_dir);
     let order = config::read_order(config_path).map_err(&context)?;
     let pin_rules = pins::read_pins(&pins::default_pins_path(config_path)).map_err(&context)?;
@@ -296,6 +299,23 @@ mod tests {
         assert!(
             err.contains("shipofharkinian.json"),
             "error should include the config path: {err}"
+        );
+    }
+
+    #[test]
+    fn scan_errors_when_mods_dir_is_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("shipofharkinian.json");
+        std::fs::write(&config, r#"{"CVars":{"gSettings":{"EnabledMods":"A"}}}"#).unwrap();
+        let missing = dir.path().join("mods");
+        let err = scan_paths(&config, &missing).unwrap_err();
+        assert!(
+            err.contains("mods directory not found"),
+            "error should say the mods dir is missing: {err}"
+        );
+        assert!(
+            err.contains("mods"),
+            "error should include the mods path: {err}"
         );
     }
 }
