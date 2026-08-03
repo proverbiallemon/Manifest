@@ -34,9 +34,16 @@ fn save_settings_at(dir: &Path, settings: &StoredSettings) -> Result<(), String>
 }
 
 fn scan_paths(config_path: &Path, mods_dir: &Path) -> Result<Report, String> {
+    let context = |e: String| {
+        format!(
+            "{e} (config: {}, mods: {})",
+            config_path.display(),
+            mods_dir.display()
+        )
+    };
     let mods = scan_library(mods_dir);
-    let order = config::read_order(config_path)?;
-    let pin_rules = pins::read_pins(&pins::default_pins_path(config_path))?;
+    let order = config::read_order(config_path).map_err(&context)?;
+    let pin_rules = pins::read_pins(&pins::default_pins_path(config_path)).map_err(&context)?;
     Ok(report::build(&mods, &order, &pin_rules))
 }
 
@@ -92,10 +99,10 @@ fn load_settings(app: tauri::AppHandle) -> Option<StoredSettings> {
 }
 
 #[tauri::command]
-fn scan(
+async fn scan(
     config_path: String,
     mods_dir: Option<String>,
-    state: tauri::State<SharedPaths>,
+    state: tauri::State<'_, SharedPaths>,
     app: tauri::AppHandle,
 ) -> Result<Report, String> {
     let config_path = PathBuf::from(config_path);
@@ -105,38 +112,49 @@ fn scan(
             .map(|p| p.join("mods"))
             .unwrap_or_else(|| PathBuf::from("mods"))
     });
-    let rpt = scan_paths(&config_path, &mods_dir)?;
+    let (c, m) = (config_path.clone(), mods_dir.clone());
+    let rpt = tauri::async_runtime::spawn_blocking(move || scan_paths(&c, &m))
+        .await
+        .map_err(|e| e.to_string())??;
     {
         let mut guard = state.lock().map_err(|_| "state lock poisoned")?;
         guard.config_path = Some(config_path.clone());
         guard.mods_dir = Some(mods_dir.clone());
     }
     if let Ok(dir) = app.path().app_config_dir() {
-        let _ = save_settings_at(
+        if let Err(e) = save_settings_at(
             &dir,
             &StoredSettings {
                 config_path: config_path.to_string_lossy().to_string(),
                 mods_dir: mods_dir.to_string_lossy().to_string(),
             },
-        );
+        ) {
+            eprintln!("manifest-gui: failed to save settings: {e}");
+        }
     }
     Ok(rpt)
 }
 
 #[tauri::command]
-fn apply_sort(state: tauri::State<SharedPaths>) -> Result<Report, String> {
+async fn apply_sort(state: tauri::State<'_, SharedPaths>) -> Result<Report, String> {
     let (config_path, mods_dir) = stored_paths(&state)?;
-    apply_sort_paths(&config_path, &mods_dir)
+    tauri::async_runtime::spawn_blocking(move || apply_sort_paths(&config_path, &mods_dir))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn set_pin(
+async fn set_pin(
     mod_name: String,
     position: Option<String>,
-    state: tauri::State<SharedPaths>,
+    state: tauri::State<'_, SharedPaths>,
 ) -> Result<Report, String> {
     let (config_path, mods_dir) = stored_paths(&state)?;
-    set_pin_paths(&config_path, &mods_dir, &mod_name, position.as_deref())
+    tauri::async_runtime::spawn_blocking(move || {
+        set_pin_paths(&config_path, &mods_dir, &mod_name, position.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -266,5 +284,18 @@ mod tests {
         save_settings_at(dir.path(), &stored).unwrap();
         assert_eq!(load_settings_at(dir.path()), Some(stored));
         assert_eq!(load_settings_at(&dir.path().join("nope")), None);
+    }
+
+    #[test]
+    fn scan_errors_name_the_paths_involved() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing_config = dir.path().join("shipofharkinian.json");
+        let mods = dir.path().join("mods");
+        std::fs::create_dir_all(&mods).unwrap();
+        let err = scan_paths(&missing_config, &mods).unwrap_err();
+        assert!(
+            err.contains("shipofharkinian.json"),
+            "error should include the config path: {err}"
+        );
     }
 }
