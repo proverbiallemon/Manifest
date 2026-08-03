@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Report } from "../types";
+  import { t } from "../copy.svelte";
 
   let {
     report,
@@ -19,17 +20,17 @@
 
 <div class="overlay" role="dialog" aria-label="re-stow the hold">
   <div class="sheet">
-    <div class="heading">RE-STOW THE HOLD</div>
+    <div class="heading">{t("modalTitle")}</div>
     <hr class="ledger-rule double" />
     <div class="columns">
       <div>
-        <div class="col-title faded">AS STOWED</div>
+        <div class="col-title faded">{t("colBefore")}</div>
         {#each report.current_order as name}
           <div class:moved={moved.has(name)}>{name}</div>
         {/each}
       </div>
       <div>
-        <div class="col-title faded">AS PROPOSED</div>
+        <div class="col-title faded">{t("colAfter")}</div>
         {#each report.proposed_order as name}
           <div class:moved={moved.has(name)} title={reasons.get(name) ?? ""}>
             {name}
@@ -42,10 +43,10 @@
     </div>
     <hr class="ledger-rule" />
     <div class="actions">
-      <span class="fine-print faded">{report.moves.length} entries move; nothing is written until stamped</span>
+      <span class="fine-print faded">{report.moves.length} {t("modalNote")}</span>
       <span>
-        <button onclick={onCancel} disabled={busy}>Belay that</button>
-        <button class="confirm" onclick={onConfirm} disabled={busy}>Stamp it</button>
+        <button onclick={onCancel} disabled={busy}>{t("cancel")}</button>
+        <button class="confirm" onclick={onConfirm} disabled={busy}>{t("confirm")}</button>
       </span>
     </div>
   </div>

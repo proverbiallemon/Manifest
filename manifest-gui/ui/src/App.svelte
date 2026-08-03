@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import * as api from "./api";
   import { appState, setReport, setError } from "./state.svelte";
+  import { t } from "./copy.svelte";
   import { sortNeeded } from "./types";
   import Header from "./lib/Header.svelte";
   import WarningCards from "./lib/WarningCards.svelte";
@@ -100,13 +101,13 @@
 
   {#if appState.error}
     <section class="damaged" role="alert">
-      <div class="heading">DAMAGED MANIFEST</div>
+      <div class="heading">{t("damagedTitle")}</div>
       <p class="fine-print">{appState.error}</p>
-      <p class="fine-print faded">nothing was changed</p>
+      <p class="fine-print faded">{t("nothingChanged")}</p>
       <p>
-        <button onclick={chooseConfig}>locate the manifest</button>
-        <button onclick={chooseModsDir}>locate the hold</button>
-        <button onclick={() => { appState.error = null; rescan(); }}>try again</button>
+        <button onclick={chooseConfig}>{t("locateConfig")}</button>
+        <button onclick={chooseModsDir}>{t("locateHold")}</button>
+        <button onclick={() => { appState.error = null; rescan(); }}>{t("tryAgain")}</button>
       </p>
     </section>
   {:else if appState.report}
@@ -123,12 +124,12 @@
       <DetailPane report={appState.report} selectedPath={appState.selectedPath} />
     </main>
   {:else if appState.loading}
-    <p class="centered faded">taking inventory of the hold...</p>
+    <p class="centered faded">{t("loading")}</p>
   {:else}
     <section class="centered">
-      <p class="faded">no manifest on file</p>
+      <p class="faded">{t("noConfig")}</p>
       <p>
-        <button onclick={chooseConfig}>locate the manifest</button>
+        <button onclick={chooseConfig}>{t("locateConfig")}</button>
       </p>
     </section>
   {/if}

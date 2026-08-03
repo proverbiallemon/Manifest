@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { t } from "../copy.svelte";
+  import SettingsPanel from "./SettingsPanel.svelte";
+
   let {
     configPath,
     sortNeeded,
@@ -20,6 +23,7 @@
   } = $props();
 
   let pathShown = $state(false);
+  let settingsOpen = $state(false);
 </script>
 
 <header>
@@ -30,20 +34,40 @@
       {#if configPath}
         {pathShown ? configPath : "reading: ..." + configPath.slice(-28)}
       {:else}
-        no manifest on file
+        {t("noConfig")}
       {/if}
     </button>
     <span class="actions">
-      <button onclick={onChooseConfig}>config</button>
-      <button onclick={onChooseMods}>hold</button>
-      <button onclick={onRescan} disabled={loading || !configPath}>take inventory</button>
+      <button onclick={onChooseConfig} title="choose the shipofharkinian.json config file to read">{t("chooseConfig")}</button>
+      <button onclick={onChooseMods} title="choose the mods folder to scan">{t("chooseHold")}</button>
+      <button
+        onclick={onRescan}
+        disabled={loading || !configPath}
+        title="rescan the mods folder and rebuild the report"
+      >
+        {t("rescan")}
+      </button>
       {#if sortNeeded}
-        <button class="restow" onclick={onRestow} disabled={loading}>
-          Re-stow the hold ({moveCount})
+        <button
+          class="restow"
+          onclick={onRestow}
+          disabled={loading}
+          title="preview and apply the proposed load order"
+        >
+          {t("restow")} ({moveCount})
         </button>
       {:else if configPath}
-        <span class="faded">hold is in order</span>
+        <span class="faded">{t("inOrder")}</span>
       {/if}
+      <span class="settings-wrap">
+        <button
+          onclick={() => (settingsOpen = !settingsOpen)}
+          title="choose how the app speaks"
+        >
+          {t("settings")}
+        </button>
+        <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} />
+      </span>
     </span>
   </div>
 </header>
@@ -80,6 +104,9 @@
     display: flex;
     gap: 8px;
     align-items: center;
+  }
+  .settings-wrap {
+    position: relative;
   }
   .restow {
     border-color: var(--red-ink);

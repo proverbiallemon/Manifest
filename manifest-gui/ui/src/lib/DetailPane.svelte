@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Report } from "../types";
   import { overlapsFor } from "../types";
+  import { t } from "../copy.svelte";
 
   let { report, selectedPath }: { report: Report; selectedPath: string | null } =
     $props();
@@ -11,21 +12,21 @@
 
 <aside aria-label="entry detail">
   {#if !mod}
-    <p class="faded">select an entry</p>
+    <p class="faded">{t("selectEntry")}</p>
   {:else}
     <div class="title">{mod.name}</div>
     <p class="fine-print faded">{mod.path}</p>
     <hr class="ledger-rule" />
     {#if mod.error}
-      <p class="error">unlistable: {mod.error}</p>
+      <p class="error">{t("unlistable")}: {mod.error}</p>
     {:else if overlaps && overlaps.contestedAssets.length === 0}
-      <p class="faded">clear: no contested cargo</p>
+      <p class="faded">{t("clearMod")}</p>
     {:else if overlaps}
       {#each overlaps.prevailsOver as o}
-        <p>prevails over {o.name} on {o.count} {o.count === 1 ? "entry" : "entries"}</p>
+        <p>{t("prevailsOver")} {o.name} on {o.count} {o.count === 1 ? t("entrySingular") : t("entryPlural")}</p>
       {/each}
       {#each overlaps.overriddenBy as o}
-        <p class="overridden">overridden by {o.name} on {o.count} {o.count === 1 ? "entry" : "entries"}</p>
+        <p class="overridden">{t("overriddenBy")} {o.name} on {o.count} {o.count === 1 ? t("entrySingular") : t("entryPlural")}</p>
       {/each}
       <hr class="ledger-rule" />
       <div class="fine-print contested">

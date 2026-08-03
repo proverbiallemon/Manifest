@@ -1,31 +1,32 @@
 <script lang="ts">
   import type { Warning } from "../types";
+  import { t } from "../copy.svelte";
 
   let { warnings }: { warnings: Warning[] } = $props();
 
   function headline(w: Warning): string {
     switch (w.kind) {
       case "total_eclipse":
-        return `${w.name} is fully covered by later cargo`;
+        return `${w.name} ${t("eclipseHeadline")}`;
       case "mutual_overlap":
-        return `${w.names.join(", ")} carry identical cargo`;
+        return `${w.names.join(", ")} ${t("overlapHeadline")}`;
       case "unlistable":
-        return `${w.name} could not be inventoried`;
+        return `${w.name} ${t("unlistableHeadline")}`;
       case "duplicate_gamebanana_mod":
-        return `${w.names.join(", ")} are the same shipment twice (GameBanana ${w.mod_id})`;
+        return `${w.names.join(", ")} ${t("duplicateHeadline")} (GameBanana ${w.mod_id})`;
     }
   }
 
   function guidance(w: Warning): string {
     switch (w.kind) {
       case "total_eclipse":
-        return "it does nothing where it sits; consider unloading it";
+        return t("eclipseGuidance");
       case "mutual_overlap":
-        return "only the last one prevails; consider keeping one";
+        return t("overlapGuidance");
       case "unlistable":
         return w.reason;
       case "duplicate_gamebanana_mod":
-        return "consider removing the extra copy";
+        return t("duplicateGuidance");
     }
   }
 </script>

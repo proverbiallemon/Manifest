@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Report } from "../types";
   import { conflictCount } from "../types";
+  import { t } from "../copy.svelte";
   import LedgerRow from "./LedgerRow.svelte";
 
   let {
@@ -33,7 +34,7 @@
 </script>
 
 <section aria-label="cargo ledger">
-  <div class="heading">LADING, IN ORDER OF LOAD</div>
+  <div class="heading">{t("ledgerHeading")}</div>
   <hr class="ledger-rule double" />
   {#each loaded as mod, i}
     <LedgerRow
@@ -46,7 +47,7 @@
     />
   {/each}
   {#if rest.length > 0}
-    <div class="heading notloaded-gap">NOT LOADED</div>
+    <div class="heading notloaded-gap">{t("notLoaded")}</div>
     <hr class="ledger-rule" />
     {#each rest as mod}
       <LedgerRow
