@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { conflictCount, overlapsFor, sortNeeded, type Report } from "./types";
 
 const base: Report = {
-  schema_version: 2,
+  schema_version: 3,
   mods: [],
   conflicts: [
     { asset: "a", providers: ["Big", "Small"], winner: "Small" },

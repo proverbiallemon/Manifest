@@ -11,6 +11,7 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     environment: "jsdom",
+    setupFiles: ["@testing-library/svelte/vitest"],
   },
   resolve: process.env.VITEST
     ? { conditions: ["browser"] }

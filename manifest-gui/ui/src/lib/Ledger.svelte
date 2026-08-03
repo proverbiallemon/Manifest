@@ -15,14 +15,21 @@
     onPin: (name: string, position: "top" | "bottom" | null) => void;
   } = $props();
 
-  const byName = $derived(new Map(report.mods.map((m) => [m.name, m])));
-  const loaded = $derived(
-    report.current_order
-      .map((n) => byName.get(n))
-      .filter((m) => m !== undefined)
+  const orderIndex = $derived(
+    new Map(report.current_order.map((n, i) => [n, i]))
   );
-  const inOrder = $derived(new Set(report.current_order));
-  const rest = $derived(report.mods.filter((m) => !inOrder.has(m.name)));
+  const loaded = $derived(
+    report.mods
+      .filter((m) => m.enabled && orderIndex.has(m.name))
+      .slice()
+      .sort(
+        (a, b) =>
+          orderIndex.get(a.name)! - orderIndex.get(b.name)! ||
+          a.path.localeCompare(b.path)
+      )
+  );
+  const loadedPaths = $derived(new Set(loaded.map((m) => m.path)));
+  const rest = $derived(report.mods.filter((m) => !loadedPaths.has(m.path)));
 </script>
 
 <section aria-label="cargo ledger">
