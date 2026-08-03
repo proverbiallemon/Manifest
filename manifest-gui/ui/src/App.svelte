@@ -92,7 +92,7 @@
       <p>hold is in order</p>
     {/if}
     <ul>
-      {#each report.mods as mod (mod.name)}
+      {#each report.mods as mod}
         <li>
           {mod.name}
           {mod.enabled ? "" : "(not loaded)"}
