@@ -6,6 +6,7 @@ export const appState = $state({
   modsDir: null as string | null,
   loading: false,
   error: null as string | null,
+  selectedPath: null as string | null,
 });
 
 export function setReport(report: Report) {

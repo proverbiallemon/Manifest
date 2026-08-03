@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conflictCount, sortNeeded, type Report } from "./types";
+import { conflictCount, overlapsFor, sortNeeded, type Report } from "./types";
 
 const base: Report = {
   schema_version: 2,
@@ -28,5 +28,31 @@ describe("sortNeeded", () => {
     expect(
       sortNeeded({ ...base, proposed_order: ["Small", "Big"] })
     ).toBe(true);
+  });
+});
+
+describe("overlapsFor", () => {
+  it("splits conflicts into prevails and overridden with counts", () => {
+    const r: Report = {
+      ...base,
+      conflicts: [
+        { asset: "a", providers: ["Big", "Small"], winner: "Small" },
+        { asset: "b", providers: ["Big", "Small"], winner: "Small" },
+        { asset: "c", providers: ["Big", "Other"], winner: "Other" },
+        { asset: "d", providers: ["Big", "Late"], winner: "Big" },
+      ],
+    };
+    const big = overlapsFor(r, "Big");
+    expect(big.overriddenBy).toEqual([
+      { name: "Small", count: 2 },
+      { name: "Other", count: 1 },
+    ]);
+    expect(big.prevailsOver).toEqual([{ name: "Late", count: 1 }]);
+    expect(big.contestedAssets).toEqual(["a", "b", "c", "d"]);
+    expect(overlapsFor(r, "Clean")).toEqual({
+      prevailsOver: [],
+      overriddenBy: [],
+      contestedAssets: [],
+    });
   });
 });
