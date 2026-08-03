@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn scan_paths_produces_v2_report() {
+    fn scan_paths_produces_current_schema_report() {
         let dir = tempfile::tempdir().unwrap();
         let (config, mods) = fixture(dir.path());
         let report = scan_paths(&config, &mods).unwrap();
