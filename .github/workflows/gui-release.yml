@@ -126,6 +126,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: bundles
@@ -167,6 +169,23 @@ jobs:
             }' > bundles/latest.json
           cat bundles/latest.json
 
+      - name: Verify updater signatures against the committed pubkey
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y minisign
+          KEY=$(jq -r .plugins.updater.pubkey manifest-gui/tauri.conf.json | base64 -d | tail -1)
+          shopt -s globstar nullglob
+          VERIFIED=0
+          for f in bundles/**/*.app.tar.gz bundles/**/*-setup.exe bundles/**/*.AppImage; do
+            base64 -d "$f.sig" > /tmp/sig.minisig
+            minisign -Vm "$f" -x /tmp/sig.minisig -P "$KEY"
+            VERIFIED=$((VERIFIED + 1))
+          done
+          if [ "$VERIFIED" -ne 3 ]; then
+            echo "expected to verify 3 updater artifacts, verified $VERIFIED"
+            exit 1
+          fi
+
       - name: Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
@@ -193,5 +212,16 @@ jobs:
 
             The app updates itself from this release onward (macOS, Windows, AppImage).
             The `.tar.gz`, `.sig`, and `latest.json` files are updater plumbing; download an installer above.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the rolling updater manifest
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: gui-latest
+          name: Manifest GUI updater manifest
+          make_latest: "false"
+          files: bundles/latest.json
+          body: Machine-consumed rolling manifest for the in-app updater; humans want the versioned releases.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

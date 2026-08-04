@@ -4,11 +4,13 @@
   let {
     version,
     busy,
+    failed,
     onInstall,
     onLater,
   }: {
     version: string;
     busy: boolean;
+    failed: boolean;
     onInstall: () => void;
     onLater: () => void;
   } = $props();
@@ -21,6 +23,8 @@
     <p class="fine-print">{t("updateBody")}: {version}</p>
     {#if busy}
       <p class="fine-print faded">{t("updateBusy")}</p>
+    {:else if failed}
+      <p class="fine-print faded">{t("updateFailed")}</p>
     {/if}
     <hr class="ledger-rule" />
     <div class="actions">

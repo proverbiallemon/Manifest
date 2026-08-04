@@ -219,6 +219,19 @@ describe("App", () => {
     expect(install).toHaveBeenCalledOnce();
   });
 
+  it("keeps the update modal open and shows the failure line when install rejects", async () => {
+    const install = vi.fn().mockRejectedValue("the crane jammed");
+    mockedUpdates.checkForUpdate.mockResolvedValue({ version: "0.3.0", install });
+    mocked.scan.mockResolvedValue(unsortedReport);
+    render(App);
+    expect(await screen.findByText("NEW SHIPMENT DOCKED")).toBeTruthy();
+    await fireEvent.click(screen.getByText("Bring it aboard"));
+    expect(install).toHaveBeenCalledOnce();
+    expect(await screen.findByText("the haul failed; the shipment stays dockside")).toBeTruthy();
+    expect(screen.getByText("NEW SHIPMENT DOCKED")).toBeTruthy();
+    expect((screen.getByText("Bring it aboard") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("stays quiet when the launch check fails", async () => {
     mockedUpdates.checkForUpdate.mockRejectedValue("no route to harbor");
     mocked.scan.mockResolvedValue(unsortedReport);

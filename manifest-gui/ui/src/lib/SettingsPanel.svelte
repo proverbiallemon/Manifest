@@ -34,7 +34,8 @@
       const outcome = await onCheckUpdates();
       checkNote = outcome === "current" ? t("updateCurrent") : null;
     } catch (e) {
-      checkNote = String(e);
+      console.warn("manual update check failed:", e);
+      checkNote = t("checkFailed");
     } finally {
       checking = false;
     }

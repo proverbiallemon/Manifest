@@ -37,6 +37,14 @@ describe("SettingsPanel", () => {
     expect(await screen.findByText("hold is current")).toBeTruthy();
   });
 
+  it("shows the ship-voice failure copy instead of the raw error when the check rejects", async () => {
+    const onCheckUpdates = vi.fn().mockRejectedValue(new Error("network down"));
+    render(SettingsPanel, { open: true, onClose: vi.fn(), onCheckUpdates });
+    await fireEvent.click(screen.getByText("check for updates"));
+    expect(await screen.findByText("could not reach the harbor")).toBeTruthy();
+    expect(screen.queryByText(/network down/)).toBeNull();
+  });
+
   it("clears the check note when the panel reopens", async () => {
     const onCheckUpdates = vi.fn().mockResolvedValue("current");
     const { rerender } = render(SettingsPanel, { open: true, onClose: vi.fn(), onCheckUpdates });

@@ -6,7 +6,7 @@ describe("UpdateModal", () => {
   it("shows the version and fires install and later", async () => {
     const onInstall = vi.fn();
     const onLater = vi.fn();
-    render(UpdateModal, { version: "0.3.0", busy: false, onInstall, onLater });
+    render(UpdateModal, { version: "0.3.0", busy: false, failed: false, onInstall, onLater });
     expect(screen.getByText("NEW SHIPMENT DOCKED")).toBeTruthy();
     expect(screen.getByText(/0\.3\.0/)).toBeTruthy();
     await fireEvent.click(screen.getByText("Bring it aboard"));
@@ -16,9 +16,16 @@ describe("UpdateModal", () => {
   });
 
   it("disables both actions and shows the busy line while installing", () => {
-    render(UpdateModal, { version: "0.3.0", busy: true, onInstall: vi.fn(), onLater: vi.fn() });
+    render(UpdateModal, { version: "0.3.0", busy: true, failed: false, onInstall: vi.fn(), onLater: vi.fn() });
     expect((screen.getByText("Bring it aboard") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByText("Not now") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("hauling the new shipment aboard...")).toBeTruthy();
+  });
+
+  it("shows the failure line and keeps both actions enabled when the install failed", () => {
+    render(UpdateModal, { version: "0.3.0", busy: false, failed: true, onInstall: vi.fn(), onLater: vi.fn() });
+    expect(screen.getByText("the haul failed; the shipment stays dockside")).toBeTruthy();
+    expect((screen.getByText("Bring it aboard") as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByText("Not now") as HTMLButtonElement).disabled).toBe(false);
   });
 });

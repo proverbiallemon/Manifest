@@ -20,6 +20,7 @@
   let parkedOpen = $state(false);
   let pendingUpdate = $state<PendingUpdate | null>(null);
   let updateBusy = $state(false);
+  let updateFailed = $state(false);
 
   const disabledMods = $derived(
     appState.report?.mods.filter((m) => !m.enabled) ?? []
@@ -164,10 +165,11 @@
     updateBusy = true;
     try {
       await pendingUpdate.install();
+      updateFailed = false;
     } catch (e) {
       console.warn("update install failed:", e);
       updateBusy = false;
-      pendingUpdate = null;
+      updateFailed = true;
     }
   }
 
@@ -266,8 +268,12 @@
     <UpdateModal
       version={pendingUpdate.version}
       busy={updateBusy}
+      failed={updateFailed}
       onInstall={installUpdate}
-      onLater={() => (pendingUpdate = null)}
+      onLater={() => {
+        pendingUpdate = null;
+        updateFailed = false;
+      }}
     />
   {/if}
 </div>

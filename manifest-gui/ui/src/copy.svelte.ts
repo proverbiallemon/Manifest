@@ -83,6 +83,11 @@ const STRINGS = {
   },
   updateCurrent: { ship: "hold is current", plain: "up to date" },
   checkUpdates: { ship: "check for updates", plain: "check for updates" },
+  updateFailed: {
+    ship: "the haul failed; the shipment stays dockside",
+    plain: "the update could not be installed",
+  },
+  checkFailed: { ship: "could not reach the harbor", plain: "could not check for updates" },
 } as const;
 
 export type CopyKey = keyof typeof STRINGS;
