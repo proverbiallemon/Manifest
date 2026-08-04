@@ -70,6 +70,19 @@ const STRINGS = {
   done: { ship: "done", plain: "done" },
   reading: { ship: "reading: ", plain: "reading: " },
   noConfigShort: { ship: "no config", plain: "no config" },
+  updateTitle: { ship: "NEW SHIPMENT DOCKED", plain: "UPDATE AVAILABLE" },
+  updateBody: {
+    ship: "a newer manifest is available",
+    plain: "a newer version is available",
+  },
+  updateInstall: { ship: "Bring it aboard", plain: "Install and relaunch" },
+  updateLater: { ship: "Not now", plain: "Not now" },
+  updateBusy: {
+    ship: "hauling the new shipment aboard...",
+    plain: "downloading the update...",
+  },
+  updateCurrent: { ship: "hold is current", plain: "up to date" },
+  checkUpdates: { ship: "check for updates", plain: "check for updates" },
 } as const;
 
 export type CopyKey = keyof typeof STRINGS;
