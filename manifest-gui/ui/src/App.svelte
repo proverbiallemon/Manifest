@@ -15,6 +15,12 @@
   let modalOpen = $state(false);
   let activeWarning = $state<Warning | null>(null);
 
+  function disabledPathFor(path: string): string {
+    if (/\.otr$/i.test(path)) return path.replace(/\.otr$/i, ".disabled");
+    if (/\.o2r$/i.test(path)) return path.replace(/\.o2r$/i, ".di2abled");
+    return path;
+  }
+
   async function rescan() {
     if (!appState.configPath || appState.loading) return;
     appState.loading = true;
@@ -102,13 +108,11 @@
       const disabled = changes.filter((c) => !c.enabled);
       const before = appState.report;
       setReport(await api.setModsEnabled(changes));
-      const after = appState.report;
       rememberDisabled(
-        disabled.map((c) => {
-          const name = before?.mods.find((m) => m.path === c.path)?.name ?? c.path;
-          const nowAt = after?.mods.find((m) => m.name === name && !m.enabled)?.path ?? c.path;
-          return { name, path: nowAt };
-        })
+        disabled.map((c) => ({
+          name: before?.mods.find((m) => m.path === c.path)?.name ?? c.path,
+          path: disabledPathFor(c.path),
+        }))
       );
       activeWarning = null;
     } catch (e) {

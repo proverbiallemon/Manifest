@@ -116,7 +116,14 @@ describe("App", () => {
     });
     mocked.scan.mockResolvedValue(warnReport);
     mocked.setModsEnabled.mockResolvedValue(
-      mkReport({ mods: [mkMod({ name: "Vanilla Equipment", path: "/mods/a/Vanilla Equipment.otr" })], current_order: ["Vanilla Equipment"], proposed_order: ["Vanilla Equipment"] })
+      mkReport({
+        mods: [
+          mkMod({ name: "Vanilla Equipment", path: "/mods/a/Vanilla Equipment.otr" }),
+          mkMod({ name: "Vanilla Equipment", path: "/mods/b/Vanilla Equipment.disabled", enabled: false }),
+        ],
+        current_order: ["Vanilla Equipment"],
+        proposed_order: ["Vanilla Equipment"],
+      })
     );
     render(App);
     await fireEvent.click(await screen.findByText(/are the same shipment twice/));
@@ -128,6 +135,10 @@ describe("App", () => {
     ]);
     expect(screen.queryByText("CONTESTED CARGO")).toBeNull();
     expect(await screen.findByText("recently set ashore")).toBeTruthy();
+    expect(appState.recentlyDisabled[0]).toEqual({
+      name: "Vanilla Equipment",
+      path: "/mods/b/Vanilla Equipment.disabled",
+    });
   });
 
   it("shows the damaged page when stamping fails", async () => {

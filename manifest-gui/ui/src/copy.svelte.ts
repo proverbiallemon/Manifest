@@ -56,6 +56,10 @@ const STRINGS = {
   haulBack: { ship: "haul back aboard", plain: "re-enable" },
   recentlyAshore: { ship: "recently set ashore", plain: "recently disabled" },
   revealItem: { ship: "open its berth", plain: "show in file manager" },
+  revealTooltip: {
+    ship: "show this file in the system file manager",
+    plain: "show this file in the system file manager",
+  },
   stampNote: {
     ship: "nothing changes until stamped",
     plain: "nothing changes until applied",

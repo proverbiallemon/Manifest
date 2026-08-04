@@ -25,7 +25,7 @@
     "names" in warning ? warning.names : [warning.name]
   );
   const rows: ReportMod[] = $derived(
-    report.mods.filter((m) => names.includes(m.name))
+    report.mods.filter((m) => names.includes(m.name) && m.enabled)
   );
 
   function initialKeeper(): string | null {
@@ -78,7 +78,7 @@
             <span class="stamp">{t("setAshore")}</span>
           {/if}
           {#if warning.kind === "unlistable"}
-            <button onclick={() => onReveal(mod.path)} disabled={busy} title="show this file in the system file manager">
+            <button onclick={() => onReveal(mod.path)} disabled={busy} title={t("revealTooltip")}>
               {t("revealItem")}
             </button>
           {/if}
