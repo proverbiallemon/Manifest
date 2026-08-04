@@ -137,8 +137,16 @@
   }
   .row .name {
     flex: 1;
+    /* flex items default to min-width auto; long unbreakable path segments
+       would otherwise force the row wider than the sheet */
+    min-width: 0;
+    overflow-wrap: anywhere;
     display: flex;
     flex-direction: column;
+  }
+  .row button,
+  .row .stamp {
+    flex-shrink: 0;
   }
   .row.ashore .name {
     color: var(--ink-faded);
