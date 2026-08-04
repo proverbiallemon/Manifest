@@ -20,6 +20,12 @@ pub struct StoredSettings {
     pub mods_dir: String,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ModToggle {
+    pub path: String,
+    pub enabled: bool,
+}
+
 const SETTINGS_FILE: &str = "settings.json";
 
 fn load_settings_at(dir: &Path) -> Option<StoredSettings> {
@@ -79,6 +85,19 @@ fn set_pin_paths(
         Some(other) => return Err(format!("unknown pin position: {other}")),
     }
     pins::write_pins(&pins_path, &Pins { top, bottom }).map_err(&context)?;
+    scan_paths(config_path, mods_dir)
+}
+
+fn set_mods_enabled_paths(
+    config_path: &Path,
+    mods_dir: &Path,
+    changes: &[ModToggle],
+) -> Result<Report, String> {
+    let list: Vec<(PathBuf, bool)> = changes
+        .iter()
+        .map(|c| (PathBuf::from(&c.path), c.enabled))
+        .collect();
+    manifest_core::toggle::set_enabled_batch(&list)?;
     scan_paths(config_path, mods_dir)
 }
 
@@ -163,6 +182,19 @@ async fn set_pin(
 }
 
 #[tauri::command]
+async fn set_mods_enabled(
+    changes: Vec<ModToggle>,
+    state: tauri::State<'_, SharedPaths>,
+) -> Result<Report, String> {
+    let (config_path, mods_dir) = stored_paths(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        set_mods_enabled_paths(&config_path, &mods_dir, &changes)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn pick_file(app: tauri::AppHandle) -> Option<String> {
     app.dialog()
         .file()
@@ -178,9 +210,16 @@ async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
         .map(|f| f.to_string())
 }
 
+#[tauri::command]
+async fn reveal_item(path: String) -> Result<(), String> {
+    tauri_plugin_opener::reveal_item_in_dir(PathBuf::from(&path))
+        .map_err(|e| format!("{e} (revealing {path})"))
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(SharedPaths::default())
         .invoke_handler(tauri::generate_handler![
             locate_config,
@@ -188,8 +227,10 @@ pub fn run() {
             scan,
             apply_sort,
             set_pin,
+            set_mods_enabled,
             pick_file,
-            pick_folder
+            pick_folder,
+            reveal_item
         ])
         .run(tauri::generate_context!())
         .expect("error while running manifest-gui");
@@ -351,6 +392,45 @@ mod tests {
         assert!(
             err.contains("mods"),
             "error should include the mods path: {err}"
+        );
+    }
+
+    #[test]
+    fn set_mods_enabled_paths_disables_and_rescans() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let small = mods.join("Small.o2r");
+        let report = set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: small.to_string_lossy().to_string(),
+                enabled: false,
+            }],
+        )
+        .unwrap();
+        let m = report.mods.iter().find(|m| m.name == "Small").unwrap();
+        assert!(!m.enabled);
+        assert!(mods.join("Small.di2abled").exists());
+    }
+
+    #[test]
+    fn set_mods_enabled_paths_failure_names_the_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        std::fs::write(mods.join("junk.txt"), b"x").unwrap();
+        let err = set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: mods.join("junk.txt").to_string_lossy().to_string(),
+                enabled: false,
+            }],
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("junk.txt"),
+            "error should name the path: {err}"
         );
     }
 }

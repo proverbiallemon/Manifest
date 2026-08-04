@@ -6,4 +6,5 @@ pub mod pins;
 pub mod report;
 pub mod scan;
 pub mod sort;
+pub mod toggle;
 pub mod warnings;

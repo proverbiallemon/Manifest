@@ -39,14 +39,25 @@ export interface StoredSettings {
   mods_dir: string;
 }
 
+export interface ModToggle {
+  path: string;
+  enabled: boolean;
+}
+
 export function conflictCount(report: Report, modName: string): number {
   return report.conflicts.filter((c) => c.providers.includes(modName)).length;
 }
 
 export function sortNeeded(report: Report): boolean {
-  return (
-    JSON.stringify(report.current_order) !== JSON.stringify(report.proposed_order)
+  // Names of disabled or removed mods linger in EnabledMods until the game's
+  // next boot rewrites it; they say nothing about ordering, so compare only
+  // the names that can actually load.
+  const loadable = new Set(
+    report.mods.filter((m) => m.enabled).map((m) => m.name)
   );
+  const current = report.current_order.filter((n) => loadable.has(n));
+  const proposed = report.proposed_order.filter((n) => loadable.has(n));
+  return JSON.stringify(current) !== JSON.stringify(proposed);
 }
 
 export interface OverlapSummary {

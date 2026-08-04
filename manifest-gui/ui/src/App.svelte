@@ -4,13 +4,22 @@
   import { appState, setReport, setError } from "./state.svelte";
   import { t } from "./copy.svelte";
   import { sortNeeded } from "./types";
+  import type { ModToggle, Warning } from "./types";
   import Header from "./lib/Header.svelte";
   import WarningCards from "./lib/WarningCards.svelte";
   import Ledger from "./lib/Ledger.svelte";
   import DetailPane from "./lib/DetailPane.svelte";
   import SortModal from "./lib/SortModal.svelte";
+  import WarningModal from "./lib/WarningModal.svelte";
+  import ParkedModal from "./lib/ParkedModal.svelte";
 
   let modalOpen = $state(false);
+  let activeWarning = $state<Warning | null>(null);
+  let parkedOpen = $state(false);
+
+  const disabledMods = $derived(
+    appState.report?.mods.filter((m) => !m.enabled) ?? []
+  );
 
   async function rescan() {
     if (!appState.configPath || appState.loading) return;
@@ -92,6 +101,43 @@
     }
   }
 
+  async function stampWarning(changes: ModToggle[]) {
+    if (appState.loading) return;
+    appState.loading = true;
+    try {
+      setReport(await api.setModsEnabled(changes));
+      activeWarning = null;
+    } catch (e) {
+      setError(String(e));
+      activeWarning = null;
+    } finally {
+      appState.loading = false;
+    }
+  }
+
+  async function reveal(path: string) {
+    try {
+      await api.revealItem(path);
+    } catch (e) {
+      setError(String(e));
+      activeWarning = null;
+    }
+  }
+
+  async function haulBack(path: string) {
+    if (appState.loading) return;
+    appState.loading = true;
+    try {
+      setReport(await api.setModsEnabled([{ path, enabled: true }]));
+      if (!appState.report?.mods.some((m) => !m.enabled)) parkedOpen = false;
+    } catch (e) {
+      setError(String(e));
+      parkedOpen = false;
+    } finally {
+      appState.loading = false;
+    }
+  }
+
   onMount(firstLoad);
 </script>
 
@@ -120,7 +166,14 @@
       </p>
     </section>
   {:else if appState.report}
-    <WarningCards warnings={appState.report.warnings} />
+    <WarningCards warnings={appState.report.warnings} onAct={(w) => (activeWarning = w)} />
+    {#if disabledMods.length > 0}
+      <div class="ashore-strip fine-print">
+        <button onclick={() => (parkedOpen = true)}>
+          {t("ashoreList")} ({disabledMods.length})
+        </button>
+      </div>
+    {/if}
     <main>
       <div class="ledger-scroll">
         <Ledger
@@ -130,7 +183,7 @@
           onPin={pin}
         />
       </div>
-      <DetailPane report={appState.report} selectedPath={appState.selectedPath} />
+      <DetailPane report={appState.report} selectedPath={appState.selectedPath} onEnable={haulBack} />
     </main>
   {:else if appState.loading}
     <p class="centered faded">{t("loading")}</p>
@@ -149,6 +202,26 @@
       busy={appState.loading}
       onConfirm={confirmSort}
       onCancel={() => (modalOpen = false)}
+    />
+  {/if}
+
+  {#if parkedOpen && !appState.error && disabledMods.length > 0}
+    <ParkedModal
+      mods={disabledMods}
+      busy={appState.loading}
+      onEnable={haulBack}
+      onClose={() => (parkedOpen = false)}
+    />
+  {/if}
+
+  {#if activeWarning && appState.report && !appState.error}
+    <WarningModal
+      warning={activeWarning}
+      report={appState.report}
+      busy={appState.loading}
+      onStamp={stampWarning}
+      onCancel={() => (activeWarning = null)}
+      onReveal={reveal}
     />
   {/if}
 </div>
@@ -180,5 +253,10 @@
   .damaged .heading {
     letter-spacing: 4px;
     color: var(--red-ink);
+  }
+  .ashore-strip {
+    display: flex;
+    justify-content: flex-end;
+    padding: 2px var(--pad) 6px;
   }
 </style>

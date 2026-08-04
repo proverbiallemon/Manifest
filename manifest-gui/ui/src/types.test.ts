@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { conflictCount, overlapsFor, sortNeeded, type Report } from "./types";
+import { mkMod } from "./lib/testReport";
 
 const base: Report = {
   schema_version: 3,
-  mods: [],
+  mods: [mkMod({ name: "Big" }), mkMod({ name: "Small" }), mkMod({ name: "Other" })],
   conflicts: [
     { asset: "a", providers: ["Big", "Small"], winner: "Small" },
     { asset: "b", providers: ["Big", "Other"], winner: "Other" },
@@ -28,6 +29,20 @@ describe("sortNeeded", () => {
     expect(
       sortNeeded({ ...base, proposed_order: ["Small", "Big"] })
     ).toBe(true);
+  });
+
+  it("ignores stale names of disabled mods left in the current order", () => {
+    const report: Report = {
+      ...base,
+      mods: [
+        mkMod({ name: "Big" }),
+        mkMod({ name: "Small" }),
+        mkMod({ name: "Parked", path: "/mods/Parked.disabled", enabled: false }),
+      ],
+      current_order: ["Big", "Parked", "Small"],
+      proposed_order: ["Big", "Small"],
+    };
+    expect(sortNeeded(report)).toBe(false);
   });
 });
 

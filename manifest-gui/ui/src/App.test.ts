@@ -12,6 +12,8 @@ vi.mock("./api", () => ({
   setPin: vi.fn(),
   pickFile: vi.fn(),
   pickFolder: vi.fn(),
+  setModsEnabled: vi.fn(),
+  revealItem: vi.fn(),
 }));
 
 import * as api from "./api";
@@ -97,5 +99,107 @@ describe("App", () => {
     await fireEvent.click(screen.getByText("hold"));
     expect(await screen.findByText("DAMAGED MANIFEST")).toBeTruthy();
     expect(screen.getByText("no folder for you")).toBeTruthy();
+  });
+
+  it("opens the warning modal from a card and refreshes after stamping", async () => {
+    const warnReport = mkReport({
+      mods: [
+        mkMod({ name: "Vanilla Equipment", path: "/mods/a/Vanilla Equipment.otr" }),
+        mkMod({ name: "Vanilla Equipment", path: "/mods/b/Vanilla Equipment.otr" }),
+      ],
+      current_order: ["Vanilla Equipment"],
+      proposed_order: ["Vanilla Equipment"],
+      warnings: [
+        { kind: "duplicate_gamebanana_mod", mod_id: 4321, names: ["Vanilla Equipment", "Vanilla Equipment"] },
+      ],
+    });
+    mocked.scan.mockResolvedValue(warnReport);
+    mocked.setModsEnabled.mockResolvedValue(
+      mkReport({
+        mods: [
+          mkMod({ name: "Vanilla Equipment", path: "/mods/a/Vanilla Equipment.otr" }),
+          mkMod({ name: "Vanilla Equipment", path: "/mods/b/Vanilla Equipment.disabled", enabled: false }),
+        ],
+        current_order: ["Vanilla Equipment"],
+        proposed_order: ["Vanilla Equipment"],
+      })
+    );
+    render(App);
+    await fireEvent.click(await screen.findByText(/are the same shipment twice/));
+    expect(await screen.findByText("CONTESTED CARGO")).toBeTruthy();
+    await fireEvent.click(screen.getAllByText("KEEP")[0]);
+    await fireEvent.click(screen.getByText("Stamp it"));
+    expect(mocked.setModsEnabled).toHaveBeenCalledWith([
+      { path: "/mods/b/Vanilla Equipment.otr", enabled: false },
+    ]);
+    expect(screen.queryByText("CONTESTED CARGO")).toBeNull();
+    // the ashore button reflects the disabled mod from the fresh report
+    const ashoreButton = await screen.findByText("set ashore (1)");
+    await fireEvent.click(ashoreButton);
+    expect(await screen.findByText("SET ASHORE")).toBeTruthy();
+    expect(screen.getByText("/mods/b/Vanilla Equipment.disabled")).toBeTruthy();
+    await fireEvent.click(screen.getByText("haul back aboard"));
+    expect(mocked.setModsEnabled).toHaveBeenLastCalledWith([
+      { path: "/mods/b/Vanilla Equipment.disabled", enabled: true },
+    ]);
+  });
+
+  it("does not resurrect the ashore modal after recovering from a failed haul-back", async () => {
+    const disabledReport = mkReport({
+      mods: [
+        mkMod({ name: "Live" }),
+        mkMod({ name: "Parked", path: "/mods/Parked.disabled", enabled: false }),
+      ],
+      current_order: ["Live"],
+      proposed_order: ["Live"],
+    });
+    mocked.scan.mockResolvedValue(disabledReport);
+    mocked.setModsEnabled.mockRejectedValue("the crane jammed");
+    render(App);
+    await fireEvent.click(await screen.findByText("set ashore (1)"));
+    await fireEvent.click(await screen.findByText("haul back aboard"));
+    expect(await screen.findByText("DAMAGED MANIFEST")).toBeTruthy();
+    await fireEvent.click(screen.getByText("try again"));
+    expect(await screen.findByText("set ashore (1)")).toBeTruthy();
+    expect(screen.queryByText("SET ASHORE")).toBeNull();
+  });
+
+  it("closes the ashore modal when the last mod is hauled back", async () => {
+    const disabledReport = mkReport({
+      mods: [
+        mkMod({ name: "Live" }),
+        mkMod({ name: "Parked", path: "/mods/Parked.disabled", enabled: false }),
+      ],
+      current_order: ["Live"],
+      proposed_order: ["Live"],
+    });
+    const cleanReport = mkReport({
+      mods: [mkMod({ name: "Live" }), mkMod({ name: "Parked" })],
+      current_order: ["Live", "Parked"],
+      proposed_order: ["Live", "Parked"],
+    });
+    mocked.scan.mockResolvedValue(disabledReport);
+    mocked.setModsEnabled.mockResolvedValue(cleanReport);
+    render(App);
+    await fireEvent.click(await screen.findByText("set ashore (1)"));
+    await fireEvent.click(await screen.findByText("haul back aboard"));
+    expect(screen.queryByText("SET ASHORE")).toBeNull();
+    expect(screen.queryByText(/set ashore \(/)).toBeNull();
+  });
+
+  it("shows the damaged page when stamping fails", async () => {
+    const warnReport = mkReport({
+      mods: [mkMod({ name: "Dead" })],
+      current_order: ["Dead"],
+      proposed_order: ["Dead"],
+      warnings: [{ kind: "total_eclipse", name: "Dead" }],
+    });
+    mocked.scan.mockResolvedValue(warnReport);
+    mocked.setModsEnabled.mockRejectedValue("the crane jammed");
+    render(App);
+    await fireEvent.click(await screen.findByText(/fully covered by later cargo/));
+    await fireEvent.click(await screen.findByText("Stamp it"));
+    expect(await screen.findByText("DAMAGED MANIFEST")).toBeTruthy();
+    expect(screen.queryByText("CONTESTED CARGO")).toBeNull();
   });
 });

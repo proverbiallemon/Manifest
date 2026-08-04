@@ -2,7 +2,7 @@
   import type { Warning } from "../types";
   import { t } from "../copy.svelte";
 
-  let { warnings }: { warnings: Warning[] } = $props();
+  let { warnings, onAct }: { warnings: Warning[]; onAct: (w: Warning) => void } = $props();
 
   function headline(w: Warning): string {
     switch (w.kind) {
@@ -34,10 +34,11 @@
 {#if warnings.length > 0}
   <section class="cards" aria-label="warnings">
     {#each warnings as w}
-      <div class="paper-slip">
+      <button class="paper-slip card" onclick={() => onAct(w)}>
         <div>{headline(w)}</div>
         <div class="fine-print faded action-slot">{guidance(w)}</div>
-      </div>
+        <div class="fine-print act-hint">{t("cardAct")} ▸</div>
+      </button>
     {/each}
   </section>
 {/if}
@@ -53,5 +54,19 @@
     min-width: 240px;
     max-width: 320px;
     flex-shrink: 0;
+  }
+  .card {
+    text-align: left;
+    font: inherit;
+    display: block;
+    background: var(--paper-dark);
+    box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.25);
+    border: 2px solid var(--rule);
+    border-left: 6px solid var(--red);
+  }
+  .act-hint {
+    color: var(--red-ink);
+    letter-spacing: 1px;
+    padding-top: 4px;
   }
 </style>
