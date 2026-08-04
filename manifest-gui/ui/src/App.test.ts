@@ -64,6 +64,21 @@ describe("App", () => {
     expect(screen.queryByText("hold is in order")).toBeNull();
   });
 
+  it("hides the in-order note while the damaged page is shown", async () => {
+    const sortedReport = mkReport({
+      mods: [mkMod({ name: "Small" })],
+      current_order: ["Small"],
+      proposed_order: ["Small"],
+    });
+    mocked.scan.mockResolvedValueOnce(sortedReport);
+    mocked.scan.mockRejectedValueOnce("the manifest is waterlogged");
+    render(App);
+    await screen.findByText("hold is in order");
+    await fireEvent.click(screen.getByText("take inventory"));
+    expect(await screen.findByText("DAMAGED MANIFEST")).toBeTruthy();
+    expect(screen.queryByText("hold is in order")).toBeNull();
+  });
+
   it("shows the error page when the config picker fails", async () => {
     mocked.scan.mockResolvedValue(unsortedReport);
     mocked.pickFile.mockRejectedValue("dialog plumbing burst");
