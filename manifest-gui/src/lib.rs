@@ -210,9 +210,16 @@ async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
         .map(|f| f.to_string())
 }
 
+#[tauri::command]
+async fn reveal_item(path: String) -> Result<(), String> {
+    tauri_plugin_opener::reveal_item_in_dir(PathBuf::from(&path))
+        .map_err(|e| format!("{e} (revealing {path})"))
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(SharedPaths::default())
         .invoke_handler(tauri::generate_handler![
             locate_config,
@@ -222,7 +229,8 @@ pub fn run() {
             set_pin,
             set_mods_enabled,
             pick_file,
-            pick_folder
+            pick_folder,
+            reveal_item
         ])
         .run(tauri::generate_context!())
         .expect("error while running manifest-gui");
