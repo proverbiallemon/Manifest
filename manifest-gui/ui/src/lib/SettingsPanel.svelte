@@ -2,9 +2,19 @@
   import { appState, setVoice } from "../state.svelte";
   import { t } from "../copy.svelte";
 
-  let { open, onClose }: { open: boolean; onClose: () => void } = $props();
+  let {
+    open,
+    onClose,
+    onCheckUpdates,
+  }: { open: boolean; onClose: () => void; onCheckUpdates: () => Promise<"update" | "current"> } = $props();
 
   let panelEl: HTMLDivElement | null = $state(null);
+  let checking = $state(false);
+  let checkNote = $state<string | null>(null);
+
+  $effect(() => {
+    if (open) checkNote = null;
+  });
 
   function handleKeydown(e: KeyboardEvent) {
     if (open && e.key === "Escape") onClose();
@@ -15,6 +25,20 @@
     // the parent wrap also holds the toggle button; its own handler owns those clicks
     const inside = panelEl.parentElement ?? panelEl;
     if (!inside.contains(e.target as Node)) onClose();
+  }
+
+  async function runCheck() {
+    checking = true;
+    checkNote = null;
+    try {
+      const outcome = await onCheckUpdates();
+      checkNote = outcome === "current" ? t("updateCurrent") : null;
+    } catch (e) {
+      console.warn("manual update check failed:", e);
+      checkNote = t("checkFailed");
+    } finally {
+      checking = false;
+    }
   }
 </script>
 
@@ -39,6 +63,15 @@
       >
         {appState.voice === "plain" ? ">" : " "} {t("voicePlain")}
       </button>
+    </div>
+    <hr class="ledger-rule" />
+    <div class="options">
+      <button class="option" onclick={runCheck} disabled={checking}>
+        {checking ? t("updateBusy") : t("checkUpdates")}
+      </button>
+      {#if checkNote}
+        <span class="fine-print faded">{checkNote}</span>
+      {/if}
     </div>
     <hr class="ledger-rule" />
     <div class="close-row">

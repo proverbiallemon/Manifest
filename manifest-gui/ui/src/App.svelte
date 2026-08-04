@@ -12,10 +12,15 @@
   import SortModal from "./lib/SortModal.svelte";
   import WarningModal from "./lib/WarningModal.svelte";
   import ParkedModal from "./lib/ParkedModal.svelte";
+  import UpdateModal from "./lib/UpdateModal.svelte";
+  import { checkForUpdate, type PendingUpdate } from "./updates";
 
   let modalOpen = $state(false);
   let activeWarning = $state<Warning | null>(null);
   let parkedOpen = $state(false);
+  let pendingUpdate = $state<PendingUpdate | null>(null);
+  let updateBusy = $state(false);
+  let updateFailed = $state(false);
 
   const disabledMods = $derived(
     appState.report?.mods.filter((m) => !m.enabled) ?? []
@@ -138,7 +143,40 @@
     }
   }
 
-  onMount(firstLoad);
+  async function launchUpdateCheck() {
+    try {
+      pendingUpdate = await checkForUpdate();
+    } catch (e) {
+      console.warn("update check failed:", e);
+    }
+  }
+
+  async function manualUpdateCheck(): Promise<"update" | "current"> {
+    const found = await checkForUpdate();
+    if (found) {
+      pendingUpdate = found;
+      return "update";
+    }
+    return "current";
+  }
+
+  async function installUpdate() {
+    if (!pendingUpdate || updateBusy) return;
+    updateBusy = true;
+    try {
+      await pendingUpdate.install();
+      updateFailed = false;
+    } catch (e) {
+      console.warn("update install failed:", e);
+      updateBusy = false;
+      updateFailed = true;
+    }
+  }
+
+  onMount(() => {
+    firstLoad();
+    launchUpdateCheck();
+  });
 </script>
 
 <div class="frame">
@@ -152,6 +190,7 @@
     onRestow={() => (modalOpen = true)}
     onChooseConfig={chooseConfig}
     onChooseMods={chooseModsDir}
+    onCheckUpdates={manualUpdateCheck}
   />
 
   {#if appState.error}
@@ -222,6 +261,19 @@
       onStamp={stampWarning}
       onCancel={() => (activeWarning = null)}
       onReveal={reveal}
+    />
+  {/if}
+
+  {#if pendingUpdate}
+    <UpdateModal
+      version={pendingUpdate.version}
+      busy={updateBusy}
+      failed={updateFailed}
+      onInstall={installUpdate}
+      onLater={() => {
+        pendingUpdate = null;
+        updateFailed = false;
+      }}
     />
   {/if}
 </div>
