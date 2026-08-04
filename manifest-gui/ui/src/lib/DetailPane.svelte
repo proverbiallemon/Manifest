@@ -3,7 +3,7 @@
   import { overlapsFor } from "../types";
   import { t } from "../copy.svelte";
 
-  let { report, selectedPath }: { report: Report; selectedPath: string | null } =
+  let { report, selectedPath, onEnable }: { report: Report; selectedPath: string | null; onEnable: (path: string) => void } =
     $props();
 
   const mod = $derived(report.mods.find((m) => m.path === selectedPath) ?? null);
@@ -16,6 +16,9 @@
   {:else}
     <div class="title">{mod.name}</div>
     <p class="fine-print faded">{mod.path}</p>
+    {#if !mod.enabled}
+      <p><button onclick={() => onEnable(mod.path)}>{t("haulBack")}</button></p>
+    {/if}
     <hr class="ledger-rule" />
     {#if mod.error}
       <p class="error">{t("unlistable")}: {mod.error}</p>

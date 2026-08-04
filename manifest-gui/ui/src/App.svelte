@@ -192,7 +192,7 @@
           onPin={pin}
         />
       </div>
-      <DetailPane report={appState.report} selectedPath={appState.selectedPath} />
+      <DetailPane report={appState.report} selectedPath={appState.selectedPath} onEnable={haulBack} />
     </main>
   {:else if appState.loading}
     <p class="centered faded">{t("loading")}</p>
