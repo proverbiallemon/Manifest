@@ -1,6 +1,9 @@
 use crate::model::ModFile;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Pinned mod names: `top` entries load first, `bottom` entries load last.
+/// Relative order WITHIN a pin block follows the current load order, not the
+/// order the names appear in the pins file (see `keep_order` in [`propose`]).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Pins {
     pub top: Vec<String>,
@@ -108,6 +111,8 @@ pub fn propose(mods: &[ModFile], current: &[String], pins: &Pins) -> SortResult 
         }
     }
 
+    // Pin blocks keep the mods' current relative order; the pins file's list
+    // order carries no meaning beyond membership.
     let keep_order = |list: &[String]| -> Vec<String> {
         let mut v: Vec<String> = working
             .iter()

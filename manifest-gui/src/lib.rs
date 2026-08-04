@@ -52,7 +52,8 @@ fn scan_paths(config_path: &Path, mods_dir: &Path) -> Result<Report, String> {
 
 fn apply_sort_paths(config_path: &Path, mods_dir: &Path) -> Result<Report, String> {
     let before = scan_paths(config_path, mods_dir)?;
-    config::write_order(config_path, &before.proposed_order)?;
+    config::write_order(config_path, &before.proposed_order)
+        .map_err(|e| format!("{e} (config: {})", config_path.display()))?;
     scan_paths(config_path, mods_dir)
 }
 
@@ -63,7 +64,8 @@ fn set_pin_paths(
     position: Option<&str>,
 ) -> Result<Report, String> {
     let pins_path = pins::default_pins_path(config_path);
-    let current = pins::read_pins(&pins_path)?;
+    let context = |e: String| format!("{e} (pins: {})", pins_path.display());
+    let current = pins::read_pins(&pins_path).map_err(&context)?;
     let mut top: Vec<String> = current.top.into_iter().filter(|n| n != mod_name).collect();
     let mut bottom: Vec<String> = current
         .bottom
@@ -76,7 +78,7 @@ fn set_pin_paths(
         None => {}
         Some(other) => return Err(format!("unknown pin position: {other}")),
     }
-    pins::write_pins(&pins_path, &Pins { top, bottom })?;
+    pins::write_pins(&pins_path, &Pins { top, bottom }).map_err(&context)?;
     scan_paths(config_path, mods_dir)
 }
 
@@ -296,6 +298,39 @@ mod tests {
         let mods = dir.path().join("mods");
         std::fs::create_dir_all(&mods).unwrap();
         let err = scan_paths(&missing_config, &mods).unwrap_err();
+        assert!(
+            err.contains("shipofharkinian.json"),
+            "error should include the config path: {err}"
+        );
+    }
+
+    #[test]
+    fn set_pin_errors_name_the_pins_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let pins_path = pins::default_pins_path(&config);
+        std::fs::write(
+            &pins_path,
+            r#"{"schema_version":1,"top":"nope","bottom":[]}"#,
+        )
+        .unwrap();
+        let err = set_pin_paths(&config, &mods, "Small", Some("top")).unwrap_err();
+        assert!(
+            err.contains("manifest-pins.json"),
+            "error should include the pins path: {err}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn apply_sort_errors_name_the_config_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+        let result = apply_sort_paths(&config, &mods);
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        let err = result.unwrap_err();
         assert!(
             err.contains("shipofharkinian.json"),
             "error should include the config path: {err}"
