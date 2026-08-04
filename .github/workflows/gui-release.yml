@@ -72,12 +72,18 @@ jobs:
           APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.NOTARY_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
+          if [ "$RUNNER_OS" = "macOS" ] && [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "DEVELOPER_ID_CERT_P12 secret is not set; refusing to build an unsigned macOS release."
+            exit 1
+          fi
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY secret is not set; updater artifacts cannot be signed."
+            exit 1
+          fi
           if [ "$RUNNER_OS" = "macOS" ]; then
-            if [ -z "$APPLE_CERTIFICATE" ]; then
-              echo "DEVELOPER_ID_CERT_P12 secret is not set; refusing to build an unsigned macOS release."
-              exit 1
-            fi
             cargo tauri build --target universal-apple-darwin
           else
             cargo tauri build
@@ -98,40 +104,94 @@ jobs:
           xcrun stapler staple "$DMG"
           spctl --assess --type open --context context:primary-signature -v "$DMG"
 
-      - name: Upload build artifacts (dry runs)
-        if: ${{ !startsWith(github.ref, 'refs/tags/gui-v') }}
+      - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bundles-${{ matrix.os }}
           path: |
             target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+            target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
             target/release/bundle/msi/*.msi
             target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.exe.sig
             target/release/bundle/deb/*.deb
             target/release/bundle/rpm/*.rpm
             target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.AppImage.sig
           if-no-files-found: error
 
+  release:
+    if: startsWith(github.ref, 'refs/tags/gui-v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: bundles
+          merge-multiple: true
+
+      - name: Assemble latest.json
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/gui-v}
+          BASE="https://github.com/proverbiallemon/Manifest/releases/download/gui-v${VERSION}"
+          shopt -s globstar nullglob
+          # shellcheck disable=SC2012 # bundle filenames are ours; find-based alternative is not worth the complexity here
+          MAC_TAR=$(ls bundles/**/*.app.tar.gz | head -1)
+          MAC_SIG=$(cat "${MAC_TAR}.sig")
+          # shellcheck disable=SC2012 # bundle filenames are ours; find-based alternative is not worth the complexity here
+          WIN_EXE=$(ls bundles/**/*-setup.exe | head -1)
+          WIN_SIG=$(cat "${WIN_EXE}.sig")
+          # shellcheck disable=SC2012 # bundle filenames are ours; find-based alternative is not worth the complexity here
+          LIN_APP=$(ls bundles/**/*.AppImage | head -1)
+          LIN_SIG=$(cat "${LIN_APP}.sig")
+          jq -n \
+            --arg version "$VERSION" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg mac_url "$BASE/$(basename "$MAC_TAR")" \
+            --arg mac_sig "$MAC_SIG" \
+            --arg win_url "$BASE/$(basename "$WIN_EXE")" \
+            --arg win_sig "$WIN_SIG" \
+            --arg lin_url "$BASE/$(basename "$LIN_APP")" \
+            --arg lin_sig "$LIN_SIG" \
+            '{
+              version: $version,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-x86_64": { url: $mac_url, signature: $mac_sig },
+                "darwin-aarch64": { url: $mac_url, signature: $mac_sig },
+                "windows-x86_64": { url: $win_url, signature: $win_sig },
+                "linux-x86_64": { url: $lin_url, signature: $lin_sig }
+              }
+            }' > bundles/latest.json
+          cat bundles/latest.json
+
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/gui-v')
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: Manifest GUI ${{ github.ref_name }}
           files: |
-            target/universal-apple-darwin/release/bundle/dmg/*.dmg
-            target/release/bundle/msi/*.msi
-            target/release/bundle/nsis/*.exe
-            target/release/bundle/deb/*.deb
-            target/release/bundle/rpm/*.rpm
-            target/release/bundle/appimage/*.AppImage
+            bundles/**/*.dmg
+            bundles/**/*.app.tar.gz
+            bundles/**/*.app.tar.gz.sig
+            bundles/**/*.msi
+            bundles/**/*.exe
+            bundles/**/*.exe.sig
+            bundles/**/*.deb
+            bundles/**/*.rpm
+            bundles/**/*.AppImage
+            bundles/**/*.AppImage.sig
+            bundles/latest.json
           body: |
             ## Manifest GUI ${{ github.ref_name }}
 
             ### Downloads
-            - **macOS** (universal, signed and notarized): the `.dmg`
+            - **macOS** (universal, signed and notarized): the `.dmg`, or `brew install --cask pocketbeardev/manifest/manifest`
             - **Windows**: the `-setup.exe` installer (unsigned; SmartScreen will warn)
             - **Linux**: `.AppImage`, `.deb`, or `.rpm` (unsigned)
 
-            macOS installs are also available via Homebrew once the cask is published.
+            The app updates itself from this release onward (macOS, Windows, AppImage).
+            The `.tar.gz`, `.sig`, and `latest.json` files are updater plumbing; download an installer above.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
