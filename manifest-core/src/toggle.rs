@@ -39,6 +39,9 @@ pub fn set_enabled(path: &Path, enabled: bool) -> Result<PathBuf, String> {
         return Ok(path.to_path_buf());
     };
     let target = path.with_extension(new_ext);
+    // Check-then-rename is not atomic: on Unix a file created at the target
+    // between this check and the rename would be silently overwritten. This
+    // is a single-user desktop tool; accepted, not defended.
     if target.exists() {
         return Err(format!(
             "refusing to rename, target already exists: {}",
