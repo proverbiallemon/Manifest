@@ -36,7 +36,7 @@
 <section aria-label="cargo ledger">
   <div class="heading">{t("ledgerHeading")}</div>
   <hr class="ledger-rule double" />
-  {#each loaded as mod, i}
+  {#each loaded as mod, i (mod.path)}
     <LedgerRow
       {mod}
       line={i + 1}
@@ -49,7 +49,7 @@
   {#if rest.length > 0}
     <div class="heading notloaded-gap">{t("notLoaded")}</div>
     <hr class="ledger-rule" />
-    {#each rest as mod}
+    {#each rest as mod (mod.path)}
       <LedgerRow
         {mod}
         line={null}

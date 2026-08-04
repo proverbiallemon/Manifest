@@ -40,21 +40,29 @@
   }
 
   async function chooseConfig() {
-    const picked = await api.pickFile();
-    if (picked) {
-      appState.configPath = picked;
-      appState.modsDir = null;
-      appState.selectedPath = null;
-      await rescan();
+    try {
+      const picked = await api.pickFile();
+      if (picked) {
+        appState.configPath = picked;
+        appState.modsDir = null;
+        appState.selectedPath = null;
+        await rescan();
+      }
+    } catch (e) {
+      setError(String(e));
     }
   }
 
   async function chooseModsDir() {
-    const picked = await api.pickFolder();
-    if (picked) {
-      appState.modsDir = picked;
-      appState.selectedPath = null;
-      await rescan();
+    try {
+      const picked = await api.pickFolder();
+      if (picked) {
+        appState.modsDir = picked;
+        appState.selectedPath = null;
+        await rescan();
+      }
+    } catch (e) {
+      setError(String(e));
     }
   }
 
@@ -93,6 +101,7 @@
     sortNeeded={appState.report ? sortNeeded(appState.report) : false}
     moveCount={appState.report?.moves.length ?? 0}
     loading={appState.loading}
+    damaged={appState.error !== null}
     onRescan={rescan}
     onRestow={() => (modalOpen = true)}
     onChooseConfig={chooseConfig}
