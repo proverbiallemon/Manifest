@@ -4,15 +4,24 @@
 
   let { open, onClose }: { open: boolean; onClose: () => void } = $props();
 
+  let panelEl: HTMLDivElement | null = $state(null);
+
   function handleKeydown(e: KeyboardEvent) {
     if (open && e.key === "Escape") onClose();
   }
+
+  function handleWindowClick(e: MouseEvent) {
+    if (!open || !panelEl) return;
+    // the parent wrap also holds the toggle button; its own handler owns those clicks
+    const inside = panelEl.parentElement ?? panelEl;
+    if (!inside.contains(e.target as Node)) onClose();
+  }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onclick={handleWindowClick} />
 
 {#if open}
-  <div class="paper-slip panel" role="dialog" aria-label="settings">
+  <div class="paper-slip panel" role="dialog" aria-label="settings" bind:this={panelEl}>
     <div class="heading">{t("settings")}</div>
     <hr class="ledger-rule" />
     <div class="options">
