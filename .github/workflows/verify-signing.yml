@@ -1,0 +1,41 @@
+name: Verify signing secrets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Sign a test file with the stored secrets
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY secret is not set."
+            exit 1
+          fi
+          echo "manifest signing check" > /tmp/testfile
+          npx --yes @tauri-apps/cli signer sign \
+            --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
+            --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
+            /tmp/testfile
+          test -s /tmp/testfile.sig
+
+      - name: Verify the signature against the committed pubkey
+        run: |
+          sudo apt-get update && sudo apt-get install -y minisign
+          KEY=$(jq -r .plugins.updater.pubkey manifest-gui/tauri.conf.json | base64 -d | tail -1)
+          base64 -d /tmp/testfile.sig > /tmp/testfile.minisig
+          minisign -Vm /tmp/testfile -x /tmp/testfile.minisig -P "$KEY"
+          echo "signing secrets and committed pubkey agree"
