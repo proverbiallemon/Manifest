@@ -30,7 +30,8 @@ jobs:
         shell: bash
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/gui-v}
-          CONF_VERSION=$(python3 -c "import json;print(json.load(open('manifest-gui/tauri.conf.json'))['version'])")
+          PY=$(command -v python3 || command -v python)
+          CONF_VERSION=$("$PY" -c "import json;print(json.load(open('manifest-gui/tauri.conf.json'))['version'])")
           if [ "$TAG_VERSION" != "$CONF_VERSION" ]; then
             echo "tag gui-v$TAG_VERSION does not match tauri.conf.json version $CONF_VERSION"
             exit 1
