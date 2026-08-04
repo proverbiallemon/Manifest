@@ -18,7 +18,12 @@ vi.mock("./api", () => ({
 
 import * as api from "./api";
 
+vi.mock("./updates", () => ({ checkForUpdate: vi.fn() }));
+
+import * as updates from "./updates";
+
 const mocked = vi.mocked(api);
+const mockedUpdates = vi.mocked(updates);
 
 const unsortedReport = mkReport({
   mods: [mkMod({ name: "Small" }), mkMod({ name: "Big" })],
@@ -39,6 +44,7 @@ beforeEach(() => {
     config_path: "/ship/shipofharkinian.json",
     mods_dir: "/ship/mods",
   });
+  mockedUpdates.checkForUpdate.mockResolvedValue(null);
 });
 
 describe("App", () => {
@@ -201,5 +207,24 @@ describe("App", () => {
     await fireEvent.click(await screen.findByText("Stamp it"));
     expect(await screen.findByText("DAMAGED MANIFEST")).toBeTruthy();
     expect(screen.queryByText("CONTESTED CARGO")).toBeNull();
+  });
+
+  it("offers the update modal when a newer version is found at launch", async () => {
+    const install = vi.fn().mockResolvedValue(undefined);
+    mockedUpdates.checkForUpdate.mockResolvedValue({ version: "0.3.0", install });
+    mocked.scan.mockResolvedValue(unsortedReport);
+    render(App);
+    expect(await screen.findByText("NEW SHIPMENT DOCKED")).toBeTruthy();
+    await fireEvent.click(screen.getByText("Bring it aboard"));
+    expect(install).toHaveBeenCalledOnce();
+  });
+
+  it("stays quiet when the launch check fails", async () => {
+    mockedUpdates.checkForUpdate.mockRejectedValue("no route to harbor");
+    mocked.scan.mockResolvedValue(unsortedReport);
+    render(App);
+    expect(await screen.findByText("Re-stow the hold (1)")).toBeTruthy();
+    expect(screen.queryByText("DAMAGED MANIFEST")).toBeNull();
+    expect(screen.queryByText("NEW SHIPMENT DOCKED")).toBeNull();
   });
 });

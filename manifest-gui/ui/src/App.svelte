@@ -12,10 +12,14 @@
   import SortModal from "./lib/SortModal.svelte";
   import WarningModal from "./lib/WarningModal.svelte";
   import ParkedModal from "./lib/ParkedModal.svelte";
+  import UpdateModal from "./lib/UpdateModal.svelte";
+  import { checkForUpdate, type PendingUpdate } from "./updates";
 
   let modalOpen = $state(false);
   let activeWarning = $state<Warning | null>(null);
   let parkedOpen = $state(false);
+  let pendingUpdate = $state<PendingUpdate | null>(null);
+  let updateBusy = $state(false);
 
   const disabledMods = $derived(
     appState.report?.mods.filter((m) => !m.enabled) ?? []
@@ -138,7 +142,30 @@
     }
   }
 
-  onMount(firstLoad);
+  async function launchUpdateCheck() {
+    try {
+      pendingUpdate = await checkForUpdate();
+    } catch (e) {
+      console.warn("update check failed:", e);
+    }
+  }
+
+  async function installUpdate() {
+    if (!pendingUpdate || updateBusy) return;
+    updateBusy = true;
+    try {
+      await pendingUpdate.install();
+    } catch (e) {
+      console.warn("update install failed:", e);
+      updateBusy = false;
+      pendingUpdate = null;
+    }
+  }
+
+  onMount(() => {
+    firstLoad();
+    launchUpdateCheck();
+  });
 </script>
 
 <div class="frame">
@@ -222,6 +249,15 @@
       onStamp={stampWarning}
       onCancel={() => (activeWarning = null)}
       onReveal={reveal}
+    />
+  {/if}
+
+  {#if pendingUpdate}
+    <UpdateModal
+      version={pendingUpdate.version}
+      busy={updateBusy}
+      onInstall={installUpdate}
+      onLater={() => (pendingUpdate = null)}
     />
   {/if}
 </div>
