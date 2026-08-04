@@ -17,6 +17,16 @@ Ship of Harkinian resolves mod conflicts by load order alone: when two mods ship
 - Warns about mods that do nothing (fully overridden), mod groups where only one can ever show, unreadable archives, and duplicate installs
 - Writes the corrected order back to `shipofharkinian.json`, touching only the mod list and preserving every other setting, atomically
 
+## Install the app
+
+Grab the latest GUI release from the [releases page](https://github.com/proverbiallemon/Manifest/releases):
+
+- **macOS**: the `.dmg` (universal, signed and notarized); open it and drag Manifest to Applications
+- **Windows**: the `-setup.exe` installer, or the `.msi`. Neither is code signed yet, so SmartScreen will warn; choose "More info" then "Run anyway"
+- **Linux**: the `.AppImage` (`chmod +x`, then run it), or the `.deb`/`.rpm` for your package manager
+
+The `manifest` CLI below is built from source for now; the app and the CLI read and write the same config and pins files.
+
 ## Usage
 
 ```
@@ -55,7 +65,7 @@ Mod archives are treated as untrusted input throughout: every read is bounds-che
 
 ## Status
 
-The core library and CLI are done. A cross-platform desktop app is planned, along with integration into [Sailswift](https://github.com/proverbiallemon/Sailswift), the macOS mod manager for Ship of Harkinian.
+The core library, CLI, and desktop app are done. Next up is integration into [Sailswift](https://github.com/proverbiallemon/Sailswift), the macOS mod manager for Ship of Harkinian.
 
 ## Building
 
