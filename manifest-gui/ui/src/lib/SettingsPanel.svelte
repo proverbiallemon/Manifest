@@ -12,6 +12,10 @@
   let checking = $state(false);
   let checkNote = $state<string | null>(null);
 
+  $effect(() => {
+    if (open) checkNote = null;
+  });
+
   function handleKeydown(e: KeyboardEvent) {
     if (open && e.key === "Escape") onClose();
   }
