@@ -60,7 +60,7 @@ pub fn detect(mods: &[ModFile], _order: &[String], graph: &ConflictGraph) -> Vec
 
     // Duplicate GameBanana mod across distinct folders.
     let mut by_gb: BTreeMap<u64, Vec<(String, String)>> = BTreeMap::new();
-    for m in mods.iter() {
+    for m in &enabled {
         if let (Some(id), Some(folder)) = (
             m.gamebanana_mod_id,
             m.path.parent().map(|p| p.to_string_lossy().to_string()),
@@ -145,9 +145,9 @@ mod tests {
     }
 
     #[test]
-    fn detects_duplicate_gamebanana_across_folders_with_disabled_mod() {
-        // Test that DuplicateGamebananaMod is detected across different parent folders
-        // even when one mod is disabled.
+    fn detects_duplicate_gamebanana_across_folders_when_both_enabled() {
+        // Test that DuplicateGamebananaMod is detected across different parent
+        // folders when both copies are enabled.
         let mod1 = ModFile {
             path: "/folder1/mod_a.otr".into(),
             name: "ModA".into(),
@@ -159,7 +159,7 @@ mod tests {
         let mod2 = ModFile {
             path: "/folder2/mod_b.otr".into(),
             name: "ModB".into(),
-            enabled: false, // disabled
+            enabled: true,
             assets: BTreeSet::new(),
             error: None,
             gamebanana_mod_id: Some(777),
@@ -169,8 +169,41 @@ mod tests {
         let graph = ConflictGraph::build(&mods, &order);
         let warnings = detect(&mods, &order, &graph);
 
-        // Should detect duplicate across folders despite disabled status
+        // Should detect duplicate across folders when both copies are enabled
         assert!(warnings.contains(&Warning::DuplicateGamebananaMod {
+            mod_id: 777,
+            names: vec!["ModA".into(), "ModB".into()]
+        }));
+    }
+
+    #[test]
+    fn no_duplicate_warning_when_only_one_enabled_copy_remains() {
+        // Disabling a copy resolves the duplicate, because the game only
+        // enumerates enabled extensions - with only one enabled copy left,
+        // there is no real duplicate at runtime, so the warning must clear.
+        let mod1 = ModFile {
+            path: "/folder1/mod_a.otr".into(),
+            name: "ModA".into(),
+            enabled: true,
+            assets: BTreeSet::new(),
+            error: None,
+            gamebanana_mod_id: Some(777),
+        };
+        let mod2 = ModFile {
+            path: "/folder2/mod_b.otr".into(),
+            name: "ModB".into(),
+            enabled: false, // disabled via keep-one flow
+            assets: BTreeSet::new(),
+            error: None,
+            gamebanana_mod_id: Some(777),
+        };
+        let mods = vec![mod1, mod2];
+        let order: Vec<String> = vec![];
+        let graph = ConflictGraph::build(&mods, &order);
+        let warnings = detect(&mods, &order, &graph);
+
+        // Should NOT detect a duplicate now that only one copy is enabled.
+        assert!(!warnings.contains(&Warning::DuplicateGamebananaMod {
             mod_id: 777,
             names: vec!["ModA".into(), "ModB".into()]
         }));

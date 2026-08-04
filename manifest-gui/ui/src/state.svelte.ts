@@ -28,7 +28,11 @@ export function setVoice(voice: "ship" | "plain") {
 const RECENT_LIMIT = 5;
 
 export function rememberDisabled(entries: { name: string; path: string }[]) {
-  appState.recentlyDisabled = [...entries, ...appState.recentlyDisabled].slice(0, RECENT_LIMIT);
+  const merged = [
+    ...entries,
+    ...appState.recentlyDisabled.filter((e) => !entries.some((n) => n.path === e.path)),
+  ];
+  appState.recentlyDisabled = merged.slice(0, RECENT_LIMIT);
 }
 
 export function forgetDisabled(path: string) {
