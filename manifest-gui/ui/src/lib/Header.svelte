@@ -7,6 +7,7 @@
     sortNeeded,
     moveCount,
     loading,
+    damaged,
     onRescan,
     onRestow,
     onChooseConfig,
@@ -16,6 +17,7 @@
     sortNeeded: boolean;
     moveCount: number;
     loading: boolean;
+    damaged: boolean;
     onRescan: () => void;
     onRestow: () => void;
     onChooseConfig: () => void;
@@ -47,7 +49,7 @@
       >
         {t("rescan")}
       </button>
-      {#if sortNeeded}
+      {#if sortNeeded && !damaged}
         <button
           class="restow"
           onclick={onRestow}
@@ -56,7 +58,7 @@
         >
           {t("restow")} ({moveCount})
         </button>
-      {:else if configPath}
+      {:else if configPath && !damaged}
         <span class="faded">{t("inOrder")}</span>
       {/if}
       <span class="settings-wrap">
