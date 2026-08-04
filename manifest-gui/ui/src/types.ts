@@ -1,5 +1,6 @@
 export interface ReportMod {
   name: string;
+  path: string;
   enabled: boolean;
   asset_count: number;
   error: string | null;
@@ -46,4 +47,36 @@ export function sortNeeded(report: Report): boolean {
   return (
     JSON.stringify(report.current_order) !== JSON.stringify(report.proposed_order)
   );
+}
+
+export interface OverlapSummary {
+  prevailsOver: { name: string; count: number }[];
+  overriddenBy: { name: string; count: number }[];
+  contestedAssets: string[];
+}
+
+export function overlapsFor(report: Report, modName: string): OverlapSummary {
+  const prevails = new Map<string, number>();
+  const overridden = new Map<string, number>();
+  const assets: string[] = [];
+  for (const c of report.conflicts) {
+    if (!c.providers.includes(modName)) continue;
+    assets.push(c.asset);
+    if (c.winner === modName) {
+      for (const p of c.providers) {
+        if (p !== modName) prevails.set(p, (prevails.get(p) ?? 0) + 1);
+      }
+    } else {
+      overridden.set(c.winner, (overridden.get(c.winner) ?? 0) + 1);
+    }
+  }
+  const toSorted = (m: Map<string, number>) =>
+    [...m.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  return {
+    prevailsOver: toSorted(prevails),
+    overriddenBy: toSorted(overridden),
+    contestedAssets: assets,
+  };
 }

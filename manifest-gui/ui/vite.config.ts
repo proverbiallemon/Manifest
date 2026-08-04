@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 export default defineConfig({
@@ -10,6 +10,10 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.ts"],
-    environment: "node",
+    environment: "jsdom",
+    setupFiles: ["./src/test-setup.ts", "@testing-library/svelte/vitest"],
   },
+  resolve: process.env.VITEST
+    ? { conditions: ["browser"] }
+    : undefined,
 });

@@ -1,0 +1,108 @@
+@font-face {
+  font-family: "Departure Mono";
+  src: url("./assets/fonts/DepartureMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+
+:root {
+  --paper: #ece5d3;
+  --paper-dark: #ded4bc;
+  --ink: #2b2622;
+  --ink-faded: #7a6f5f;
+  --rule: #b8ab8f;
+  --red: #a03024;
+  --red-ink: #7c2018;
+  --seal: #8a2018;
+  --pad: 12px;
+  font-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: "Departure Mono", monospace;
+  -webkit-font-smoothing: none;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image: url("./assets/paper.png");
+  background-size: 128px 128px;
+  image-rendering: pixelated;
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper-dark);
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:active {
+  translate: 2px 2px;
+  box-shadow: none;
+}
+
+button:disabled {
+  color: var(--ink-faded);
+  border-color: var(--ink-faded);
+  box-shadow: 2px 2px 0 var(--ink-faded);
+  cursor: default;
+}
+
+img.pixel {
+  image-rendering: pixelated;
+}
+
+.ledger-rule {
+  border: 0;
+  border-top: 2px solid var(--rule);
+  margin: 0;
+}
+
+.ledger-rule.double {
+  border-top: 4px double var(--ink);
+}
+
+.stamp {
+  display: inline-block;
+  color: var(--red);
+  border: 3px solid var(--red);
+  padding: 0 6px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  rotate: -8deg;
+  opacity: 0.85;
+  user-select: none;
+}
+
+.paper-slip {
+  background: var(--paper-dark);
+  border: 2px solid var(--rule);
+  border-left: 6px solid var(--red);
+  box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.25);
+  padding: 8px var(--pad);
+}
+
+.faded {
+  color: var(--ink-faded);
+}
+
+.fine-print {
+  font-size: 11px;
+  line-height: 1.7;
+}
