@@ -39,4 +39,21 @@ describe("Ledger", () => {
     expect(screen.getByText("NOT LOADED")).toBeTruthy();
     expect(screen.getAllByRole("row")).toHaveLength(3);
   });
+
+  it("keeps each mod's row DOM node when the order changes", async () => {
+    const mods = [mkMod({ name: "Small" }), mkMod({ name: "Big" })];
+    const { rerender } = render(Ledger, {
+      report: mkReport({ mods, current_order: ["Small", "Big"] }),
+      selectedPath: null,
+      onSelect: vi.fn(),
+      onPin: vi.fn(),
+    });
+    const bigRowBefore = screen.getByText("Big").closest('[role="row"]');
+    expect(bigRowBefore).toBeTruthy();
+    await rerender({
+      report: mkReport({ mods, current_order: ["Big", "Small"] }),
+    });
+    const bigRowAfter = screen.getByText("Big").closest('[role="row"]');
+    expect(bigRowAfter).toBe(bigRowBefore);
+  });
 });
