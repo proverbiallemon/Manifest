@@ -21,7 +21,7 @@ Ship of Harkinian resolves mod conflicts by load order alone: when two mods ship
 
 Grab the latest GUI release from the [releases page](https://github.com/proverbiallemon/Manifest/releases):
 
-- **macOS**: the `.dmg` (universal, signed and notarized); open it and drag Manifest to Applications
+- **macOS**: `brew install --cask pocketbeardev/manifest/manifest`, or the `.dmg` (universal, signed and notarized); open it and drag Manifest to Applications
 - **Windows**: the `-setup.exe` installer, or the `.msi`. Neither is code signed yet, so SmartScreen will warn; choose "More info" then "Run anyway"
 - **Linux**: the `.AppImage` (`chmod +x`, then run it), or the `.deb`/`.rpm` for your package manager
 
