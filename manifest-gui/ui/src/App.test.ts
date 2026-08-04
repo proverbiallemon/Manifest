@@ -144,6 +144,49 @@ describe("App", () => {
     ]);
   });
 
+  it("does not resurrect the ashore modal after recovering from a failed haul-back", async () => {
+    const disabledReport = mkReport({
+      mods: [
+        mkMod({ name: "Live" }),
+        mkMod({ name: "Parked", path: "/mods/Parked.disabled", enabled: false }),
+      ],
+      current_order: ["Live"],
+      proposed_order: ["Live"],
+    });
+    mocked.scan.mockResolvedValue(disabledReport);
+    mocked.setModsEnabled.mockRejectedValue("the crane jammed");
+    render(App);
+    await fireEvent.click(await screen.findByText("set ashore (1)"));
+    await fireEvent.click(await screen.findByText("haul back aboard"));
+    expect(await screen.findByText("DAMAGED MANIFEST")).toBeTruthy();
+    await fireEvent.click(screen.getByText("try again"));
+    expect(await screen.findByText("set ashore (1)")).toBeTruthy();
+    expect(screen.queryByText("SET ASHORE")).toBeNull();
+  });
+
+  it("closes the ashore modal when the last mod is hauled back", async () => {
+    const disabledReport = mkReport({
+      mods: [
+        mkMod({ name: "Live" }),
+        mkMod({ name: "Parked", path: "/mods/Parked.disabled", enabled: false }),
+      ],
+      current_order: ["Live"],
+      proposed_order: ["Live"],
+    });
+    const cleanReport = mkReport({
+      mods: [mkMod({ name: "Live" }), mkMod({ name: "Parked" })],
+      current_order: ["Live", "Parked"],
+      proposed_order: ["Live", "Parked"],
+    });
+    mocked.scan.mockResolvedValue(disabledReport);
+    mocked.setModsEnabled.mockResolvedValue(cleanReport);
+    render(App);
+    await fireEvent.click(await screen.findByText("set ashore (1)"));
+    await fireEvent.click(await screen.findByText("haul back aboard"));
+    expect(screen.queryByText("SET ASHORE")).toBeNull();
+    expect(screen.queryByText(/set ashore \(/)).toBeNull();
+  });
+
   it("shows the damaged page when stamping fails", async () => {
     const warnReport = mkReport({
       mods: [mkMod({ name: "Dead" })],

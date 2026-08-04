@@ -132,6 +132,7 @@
       if (!appState.report?.mods.some((m) => !m.enabled)) parkedOpen = false;
     } catch (e) {
       setError(String(e));
+      parkedOpen = false;
     } finally {
       appState.loading = false;
     }
