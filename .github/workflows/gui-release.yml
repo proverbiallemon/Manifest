@@ -215,13 +215,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Stage stable-name installers for the rolling release
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          cp bundles/**/*.dmg bundles/Manifest-universal.dmg
+          cp bundles/**/*-setup.exe bundles/Manifest-setup.exe
+          cp bundles/**/*.AppImage bundles/Manifest.AppImage
+          ls -la bundles/Manifest-universal.dmg bundles/Manifest-setup.exe bundles/Manifest.AppImage
+
       - name: Publish the rolling updater manifest
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: gui-latest
           name: Manifest GUI updater manifest
           make_latest: "false"
-          files: bundles/latest.json
-          body: Machine-consumed rolling manifest for the in-app updater; humans want the versioned releases.
+          files: |
+            bundles/latest.json
+            bundles/Manifest-universal.dmg
+            bundles/Manifest-setup.exe
+            bundles/Manifest.AppImage
+          body: Machine-consumed rolling manifest and stable-name installers; humans browsing want the versioned releases.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
