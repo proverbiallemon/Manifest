@@ -126,7 +126,11 @@
   }
   .rows {
     overflow-y: auto;
-    padding: 8px 0;
+    /* hidden, not visible: subpixel flex rounding can overflow by 1px and
+       summon a horizontal scrollbar; the right padding keeps the KEEP
+       buttons clear of the macOS overlay scrollbar */
+    overflow-x: hidden;
+    padding: 8px 14px 8px 0;
     font-size: 12px;
   }
   .row {
