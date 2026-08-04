@@ -39,6 +39,11 @@ export interface StoredSettings {
   mods_dir: string;
 }
 
+export interface ModToggle {
+  path: string;
+  enabled: boolean;
+}
+
 export function conflictCount(report: Report, modName: string): number {
   return report.conflicts.filter((c) => c.providers.includes(modName)).length;
 }

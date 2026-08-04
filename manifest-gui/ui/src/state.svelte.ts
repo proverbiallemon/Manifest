@@ -8,6 +8,7 @@ export const appState = $state({
   error: null as string | null,
   selectedPath: null as string | null,
   voice: (localStorage.getItem("manifest-voice") === "plain" ? "plain" : "ship") as "ship" | "plain",
+  recentlyDisabled: [] as { name: string; path: string }[],
 });
 
 export function setReport(report: Report) {
@@ -22,4 +23,14 @@ export function setError(message: string) {
 export function setVoice(voice: "ship" | "plain") {
   appState.voice = voice;
   localStorage.setItem("manifest-voice", voice);
+}
+
+const RECENT_LIMIT = 5;
+
+export function rememberDisabled(entries: { name: string; path: string }[]) {
+  appState.recentlyDisabled = [...entries, ...appState.recentlyDisabled].slice(0, RECENT_LIMIT);
+}
+
+export function forgetDisabled(path: string) {
+  appState.recentlyDisabled = appState.recentlyDisabled.filter((e) => e.path !== path);
 }

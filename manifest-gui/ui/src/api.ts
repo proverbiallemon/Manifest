@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Report, StoredSettings } from "./types";
+import type { Report, StoredSettings, ModToggle } from "./types";
 
 export function locateConfig(): Promise<string | null> {
   return invoke("locate_config");
@@ -22,6 +22,14 @@ export function setPin(
   position: "top" | "bottom" | null
 ): Promise<Report> {
   return invoke("set_pin", { modName, position });
+}
+
+export function setModsEnabled(changes: ModToggle[]): Promise<Report> {
+  return invoke("set_mods_enabled", { changes });
+}
+
+export function revealItem(path: string): Promise<void> {
+  return invoke("reveal_item", { path });
 }
 
 export function pickFile(): Promise<string | null> {
