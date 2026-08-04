@@ -35,7 +35,6 @@ beforeEach(() => {
   appState.loading = false;
   appState.error = null;
   appState.selectedPath = null;
-  appState.recentlyDisabled = [];
   mocked.loadSettings.mockResolvedValue({
     config_path: "/ship/shipofharkinian.json",
     mods_dir: "/ship/mods",
@@ -134,11 +133,15 @@ describe("App", () => {
       { path: "/mods/b/Vanilla Equipment.otr", enabled: false },
     ]);
     expect(screen.queryByText("CONTESTED CARGO")).toBeNull();
-    expect(await screen.findByText("recently set ashore")).toBeTruthy();
-    expect(appState.recentlyDisabled[0]).toEqual({
-      name: "Vanilla Equipment",
-      path: "/mods/b/Vanilla Equipment.disabled",
-    });
+    // the ashore button reflects the disabled mod from the fresh report
+    const ashoreButton = await screen.findByText("set ashore (1)");
+    await fireEvent.click(ashoreButton);
+    expect(await screen.findByText("SET ASHORE")).toBeTruthy();
+    expect(screen.getByText("/mods/b/Vanilla Equipment.disabled")).toBeTruthy();
+    await fireEvent.click(screen.getByText("haul back aboard"));
+    expect(mocked.setModsEnabled).toHaveBeenLastCalledWith([
+      { path: "/mods/b/Vanilla Equipment.disabled", enabled: true },
+    ]);
   });
 
   it("shows the damaged page when stamping fails", async () => {

@@ -54,7 +54,8 @@ const STRINGS = {
   keepStamp: { ship: "KEEP", plain: "KEEP" },
   setAshore: { ship: "set ashore", plain: "disable" },
   haulBack: { ship: "haul back aboard", plain: "re-enable" },
-  recentlyAshore: { ship: "recently set ashore", plain: "recently disabled" },
+  ashoreList: { ship: "set ashore", plain: "disabled mods" },
+  ashoreTitle: { ship: "SET ASHORE", plain: "DISABLED MODS" },
   revealItem: { ship: "open its berth", plain: "show in file manager" },
   revealTooltip: {
     ship: "show this file in the system file manager",

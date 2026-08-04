@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import * as api from "./api";
-  import { appState, setReport, setError, rememberDisabled, forgetDisabled } from "./state.svelte";
+  import { appState, setReport, setError } from "./state.svelte";
   import { t } from "./copy.svelte";
   import { sortNeeded } from "./types";
   import type { ModToggle, Warning } from "./types";
@@ -11,15 +11,15 @@
   import DetailPane from "./lib/DetailPane.svelte";
   import SortModal from "./lib/SortModal.svelte";
   import WarningModal from "./lib/WarningModal.svelte";
+  import ParkedModal from "./lib/ParkedModal.svelte";
 
   let modalOpen = $state(false);
   let activeWarning = $state<Warning | null>(null);
+  let parkedOpen = $state(false);
 
-  function disabledPathFor(path: string): string {
-    if (/\.otr$/i.test(path)) return path.replace(/\.otr$/i, ".disabled");
-    if (/\.o2r$/i.test(path)) return path.replace(/\.o2r$/i, ".di2abled");
-    return path;
-  }
+  const disabledMods = $derived(
+    appState.report?.mods.filter((m) => !m.enabled) ?? []
+  );
 
   async function rescan() {
     if (!appState.configPath || appState.loading) return;
@@ -105,15 +105,7 @@
     if (appState.loading) return;
     appState.loading = true;
     try {
-      const disabled = changes.filter((c) => !c.enabled);
-      const before = appState.report;
       setReport(await api.setModsEnabled(changes));
-      rememberDisabled(
-        disabled.map((c) => ({
-          name: before?.mods.find((m) => m.path === c.path)?.name ?? c.path,
-          path: disabledPathFor(c.path),
-        }))
-      );
       activeWarning = null;
     } catch (e) {
       setError(String(e));
@@ -137,7 +129,7 @@
     appState.loading = true;
     try {
       setReport(await api.setModsEnabled([{ path, enabled: true }]));
-      forgetDisabled(path);
+      if (!appState.report?.mods.some((m) => !m.enabled)) parkedOpen = false;
     } catch (e) {
       setError(String(e));
     } finally {
@@ -174,13 +166,11 @@
     </section>
   {:else if appState.report}
     <WarningCards warnings={appState.report.warnings} onAct={(w) => (activeWarning = w)} />
-    {#if appState.recentlyDisabled.length > 0}
-      <div class="undo-strip fine-print">
-        <span class="faded">{t("recentlyAshore")}</span>
-        {#each appState.recentlyDisabled as entry (entry.path)}
-          <span>{entry.name}</span>
-          <button onclick={() => haulBack(entry.path)}>{t("haulBack")}</button>
-        {/each}
+    {#if disabledMods.length > 0}
+      <div class="ashore-strip fine-print">
+        <button onclick={() => (parkedOpen = true)}>
+          {t("ashoreList")} ({disabledMods.length})
+        </button>
       </div>
     {/if}
     <main>
@@ -211,6 +201,15 @@
       busy={appState.loading}
       onConfirm={confirmSort}
       onCancel={() => (modalOpen = false)}
+    />
+  {/if}
+
+  {#if parkedOpen && !appState.error && disabledMods.length > 0}
+    <ParkedModal
+      mods={disabledMods}
+      busy={appState.loading}
+      onEnable={haulBack}
+      onClose={() => (parkedOpen = false)}
     />
   {/if}
 
@@ -254,11 +253,9 @@
     letter-spacing: 4px;
     color: var(--red-ink);
   }
-  .undo-strip {
+  .ashore-strip {
     display: flex;
-    gap: 8px;
-    align-items: center;
+    justify-content: flex-end;
     padding: 2px var(--pad) 6px;
-    flex-wrap: wrap;
   }
 </style>
