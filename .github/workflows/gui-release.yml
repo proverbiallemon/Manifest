@@ -83,6 +83,21 @@ jobs:
             cargo tauri build
           fi
 
+      - name: Notarize and staple the dmg
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          DMG=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$NOTARY_PASSWORD" \
+            --wait --timeout 90m
+          xcrun stapler staple "$DMG"
+          spctl --assess --type open --context context:primary-signature -v "$DMG"
+
       - name: Upload build artifacts (dry runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/gui-v') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
