@@ -14,6 +14,7 @@ describe("Header", () => {
       onRestow: vi.fn(),
       onChooseConfig: vi.fn(),
       onChooseMods: vi.fn(),
+      onCheckUpdates: vi.fn().mockResolvedValue("current"),
     });
     await fireEvent.click(screen.getByText("settings"));
     expect(screen.getByRole("dialog", { name: "settings" })).toBeTruthy();

@@ -12,6 +12,7 @@
     onRestow,
     onChooseConfig,
     onChooseMods,
+    onCheckUpdates,
   }: {
     configPath: string | null;
     sortNeeded: boolean;
@@ -22,6 +23,7 @@
     onRestow: () => void;
     onChooseConfig: () => void;
     onChooseMods: () => void;
+    onCheckUpdates: () => Promise<"update" | "current">;
   } = $props();
 
   let pathShown = $state(false);
@@ -68,7 +70,7 @@
         >
           {t("settings")}
         </button>
-        <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} />
+        <SettingsPanel open={settingsOpen} onClose={() => (settingsOpen = false)} {onCheckUpdates} />
       </span>
     </span>
   </div>

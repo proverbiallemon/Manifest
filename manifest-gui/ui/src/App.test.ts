@@ -226,5 +226,6 @@ describe("App", () => {
     expect(await screen.findByText("Re-stow the hold (1)")).toBeTruthy();
     expect(screen.queryByText("DAMAGED MANIFEST")).toBeNull();
     expect(screen.queryByText("NEW SHIPMENT DOCKED")).toBeNull();
+    expect(mockedUpdates.checkForUpdate).toHaveBeenCalledOnce();
   });
 });

@@ -150,6 +150,15 @@
     }
   }
 
+  async function manualUpdateCheck(): Promise<"update" | "current"> {
+    const found = await checkForUpdate();
+    if (found) {
+      pendingUpdate = found;
+      return "update";
+    }
+    return "current";
+  }
+
   async function installUpdate() {
     if (!pendingUpdate || updateBusy) return;
     updateBusy = true;
@@ -179,6 +188,7 @@
     onRestow={() => (modalOpen = true)}
     onChooseConfig={chooseConfig}
     onChooseMods={chooseModsDir}
+    onCheckUpdates={manualUpdateCheck}
   />
 
   {#if appState.error}
