@@ -1,16 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import * as api from "./api";
-  import { appState, setReport, setError } from "./state.svelte";
+  import { appState, setReport, setError, rememberDisabled, forgetDisabled } from "./state.svelte";
   import { t } from "./copy.svelte";
   import { sortNeeded } from "./types";
+  import type { ModToggle, Warning } from "./types";
   import Header from "./lib/Header.svelte";
   import WarningCards from "./lib/WarningCards.svelte";
   import Ledger from "./lib/Ledger.svelte";
   import DetailPane from "./lib/DetailPane.svelte";
   import SortModal from "./lib/SortModal.svelte";
+  import WarningModal from "./lib/WarningModal.svelte";
 
   let modalOpen = $state(false);
+  let activeWarning = $state<Warning | null>(null);
 
   async function rescan() {
     if (!appState.configPath || appState.loading) return;
@@ -92,6 +95,52 @@
     }
   }
 
+  async function stampWarning(changes: ModToggle[]) {
+    if (appState.loading) return;
+    appState.loading = true;
+    try {
+      const disabled = changes.filter((c) => !c.enabled);
+      const before = appState.report;
+      setReport(await api.setModsEnabled(changes));
+      const after = appState.report;
+      rememberDisabled(
+        disabled.map((c) => {
+          const name = before?.mods.find((m) => m.path === c.path)?.name ?? c.path;
+          const nowAt = after?.mods.find((m) => m.name === name && !m.enabled)?.path ?? c.path;
+          return { name, path: nowAt };
+        })
+      );
+      activeWarning = null;
+    } catch (e) {
+      setError(String(e));
+      activeWarning = null;
+    } finally {
+      appState.loading = false;
+    }
+  }
+
+  async function reveal(path: string) {
+    try {
+      await api.revealItem(path);
+    } catch (e) {
+      setError(String(e));
+      activeWarning = null;
+    }
+  }
+
+  async function haulBack(path: string) {
+    if (appState.loading) return;
+    appState.loading = true;
+    try {
+      setReport(await api.setModsEnabled([{ path, enabled: true }]));
+      forgetDisabled(path);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      appState.loading = false;
+    }
+  }
+
   onMount(firstLoad);
 </script>
 
@@ -120,7 +169,16 @@
       </p>
     </section>
   {:else if appState.report}
-    <WarningCards warnings={appState.report.warnings} />
+    <WarningCards warnings={appState.report.warnings} onAct={(w) => (activeWarning = w)} />
+    {#if appState.recentlyDisabled.length > 0}
+      <div class="undo-strip fine-print">
+        <span class="faded">{t("recentlyAshore")}</span>
+        {#each appState.recentlyDisabled as entry (entry.path)}
+          <span>{entry.name}</span>
+          <button onclick={() => haulBack(entry.path)}>{t("haulBack")}</button>
+        {/each}
+      </div>
+    {/if}
     <main>
       <div class="ledger-scroll">
         <Ledger
@@ -149,6 +207,17 @@
       busy={appState.loading}
       onConfirm={confirmSort}
       onCancel={() => (modalOpen = false)}
+    />
+  {/if}
+
+  {#if activeWarning && appState.report && !appState.error}
+    <WarningModal
+      warning={activeWarning}
+      report={appState.report}
+      busy={appState.loading}
+      onStamp={stampWarning}
+      onCancel={() => (activeWarning = null)}
+      onReveal={reveal}
     />
   {/if}
 </div>
@@ -180,5 +249,12 @@
   .damaged .heading {
     letter-spacing: 4px;
     color: var(--red-ink);
+  }
+  .undo-strip {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 2px var(--pad) 6px;
+    flex-wrap: wrap;
   }
 </style>

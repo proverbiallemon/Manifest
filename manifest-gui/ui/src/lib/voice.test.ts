@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 import WarningCards from "./WarningCards.svelte";
 import { setVoice } from "../state.svelte";
@@ -12,6 +12,7 @@ describe("voice toggle", () => {
   it("renders ship voice by default", () => {
     render(WarningCards, {
       warnings: [{ kind: "total_eclipse", name: "Ghost" }],
+      onAct: vi.fn(),
     });
     expect(screen.getByText("Ghost is fully covered by later cargo")).toBeTruthy();
   });
@@ -20,6 +21,7 @@ describe("voice toggle", () => {
     setVoice("plain");
     render(WarningCards, {
       warnings: [{ kind: "total_eclipse", name: "Ghost" }],
+      onAct: vi.fn(),
     });
     expect(screen.getByText("Ghost is fully overridden by later mods")).toBeTruthy();
     expect(localStorage.getItem("manifest-voice")).toBe("plain");
