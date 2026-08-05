@@ -127,6 +127,22 @@ export function zoneNameLists(z: Zones): {
   return { fore: dedupe(z.fore), free: dedupe(z.free), aft: dedupe(z.aft) };
 }
 
+// For a zone's rows (which may repeat a name across duplicate files), the row
+// index of each unique name's first occurrence, in the same first-seen order
+// zoneNameLists produces. Lets drag code pick one representative row element
+// per deduped name.
+export function firstRowIndexes(mods: ReportMod[]): number[] {
+  const seen = new Set<string>();
+  const out: number[] = [];
+  mods.forEach((m, i) => {
+    if (!seen.has(m.name)) {
+      seen.add(m.name);
+      out.push(i);
+    }
+  });
+  return out;
+}
+
 // True when the actual EnabledMods sequence no longer equals fore+free+aft,
 // which happens when the game's boot rewrite moves things behind our back.
 export function zonesShifted(report: Report): boolean {

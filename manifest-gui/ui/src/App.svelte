@@ -240,6 +240,7 @@
           onSelect={(p) => (appState.selectedPath = p)}
           onPin={pin}
           onReorder={doReorder}
+          busy={appState.loading}
         />
       </div>
       <DetailPane report={appState.report} selectedPath={appState.selectedPath} onEnable={haulBack} />

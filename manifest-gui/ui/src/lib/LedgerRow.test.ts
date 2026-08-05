@@ -51,4 +51,20 @@ describe("LedgerRow", () => {
     expect(screen.queryByText("top")).toBeNull();
     expect(screen.queryByText("btm")).toBeNull();
   });
+
+  it("hides the grip and pin controls for an errored mod even with a line number", () => {
+    render(LedgerRow, {
+      props: {
+        mod: mkMod({ name: "Broken", error: "no (listfile)" }),
+        line: 1,
+        conflicts: 0,
+        onSelect: () => {},
+        onPin: () => {},
+        onGrab: () => {},
+      },
+    });
+    expect(screen.queryByTitle("drag to reorder")).toBeNull();
+    expect(screen.queryByText("top")).toBeNull();
+    expect(screen.queryByText("btm")).toBeNull();
+  });
 });

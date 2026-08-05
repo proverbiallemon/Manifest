@@ -33,7 +33,7 @@
   onkeydown={(e) => e.key === "Enter" && onSelect(mod.path)}
 >
   <span class="line faded">
-    {#if onGrab && line !== null}
+    {#if onGrab && line !== null && !mod.error}
       <span
         class="grip"
         title="drag to reorder"
@@ -63,7 +63,7 @@
     {/if}
   </span>
   <span class="pins">
-    {#if line !== null}
+    {#if line !== null && !mod.error}
       <button title="pin to top (loads first)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "top"); }}>top</button>
       <button title="pin to bottom (loads last, wins)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "bottom"); }}>btm</button>
       {#if mod.pinned}

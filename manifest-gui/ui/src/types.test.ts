@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conflictCount, deriveZones, overlapsFor, sortNeeded, zoneNameLists, zonesShifted, type Report } from "./types";
+import { conflictCount, deriveZones, firstRowIndexes, overlapsFor, sortNeeded, zoneNameLists, zonesShifted, type Report } from "./types";
 import { mkMod, mkReport } from "./lib/testReport";
 
 const base: Report = {
@@ -111,6 +111,26 @@ describe("deriveZones", () => {
     const z = deriveZones(dup);
     expect(z.free.length).toBe(2);
     expect(zoneNameLists(z).free).toEqual(["Twin"]);
+  });
+});
+
+describe("firstRowIndexes", () => {
+  it("returns the row index of each unique name's first occurrence, in first-seen order", () => {
+    const mods = [
+      mkMod({ name: "Twin", path: "/mods/a/Twin.otr" }),
+      mkMod({ name: "Twin", path: "/mods/b/Twin.otr" }),
+      mkMod({ name: "Other" }),
+    ];
+    expect(firstRowIndexes(mods)).toEqual([0, 2]);
+  });
+
+  it("returns one index per row when there are no duplicates", () => {
+    const mods = [mkMod({ name: "A" }), mkMod({ name: "B" }), mkMod({ name: "C" })];
+    expect(firstRowIndexes(mods)).toEqual([0, 1, 2]);
+  });
+
+  it("returns an empty array for an empty zone", () => {
+    expect(firstRowIndexes([])).toEqual([]);
   });
 });
 

@@ -175,4 +175,122 @@ describe("drag reordering", () => {
     window.dispatchEvent(new MouseEvent("pointerup", { clientY: 10 }));
     expect(onReorder).not.toHaveBeenCalled();
   });
+
+  it("dragging the second row of a duplicate-named pair moves that name, not the next one", async () => {
+    const onReorder = vi.fn();
+    const dupReport = mkReport({
+      mods: [
+        mkMod({ name: "Twin", path: "/mods/a/Twin.otr" }),
+        mkMod({ name: "Twin", path: "/mods/b/Twin.otr" }),
+        mkMod({ name: "Other" }),
+      ],
+      current_order: ["Twin", "Other"],
+    });
+    render(Ledger, {
+      props: {
+        report: dupReport,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+      },
+    });
+    // slotFromPointer is mocked to always land at { zone: "aft", index: 0 }.
+    const grips = screen.getAllByTitle("drag to reorder");
+    await fireEvent.pointerDown(grips[1], { clientY: 10 });
+    window.dispatchEvent(new MouseEvent("pointermove", { clientY: 200 }));
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 200 }));
+    expect(onReorder).toHaveBeenCalledWith([], ["Other"], ["Twin"]);
+  });
+
+  it("dragging the row after a duplicate-named pair moves the correct name", async () => {
+    const onReorder = vi.fn();
+    const dupReport = mkReport({
+      mods: [
+        mkMod({ name: "Twin", path: "/mods/a/Twin.otr" }),
+        mkMod({ name: "Twin", path: "/mods/b/Twin.otr" }),
+        mkMod({ name: "Other" }),
+      ],
+      current_order: ["Twin", "Other"],
+    });
+    render(Ledger, {
+      props: {
+        report: dupReport,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+      },
+    });
+    const grips = screen.getAllByTitle("drag to reorder");
+    await fireEvent.pointerDown(grips[2], { clientY: 10 });
+    window.dispatchEvent(new MouseEvent("pointermove", { clientY: 200 }));
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 200 }));
+    expect(onReorder).toHaveBeenCalledWith([], ["Twin"], ["Other"]);
+  });
+});
+
+describe("drag guards", () => {
+  const report = mkReport({
+    mods: [mkMod({ name: "A" }), mkMod({ name: "Fine", pinned: "bottom" })],
+    current_order: ["A", "Fine"],
+  });
+
+  it("refuses to start a drag while busy", async () => {
+    const onReorder = vi.fn();
+    render(Ledger, {
+      props: {
+        report,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+        busy: true,
+      },
+    });
+    const grip = screen.getAllByTitle("drag to reorder")[0];
+    await fireEvent.pointerDown(grip, { clientY: 10 });
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 200 }));
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  it("cancels an active drag when the report prop changes before drop", async () => {
+    const onReorder = vi.fn();
+    const { rerender } = render(Ledger, {
+      props: {
+        report,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+      },
+    });
+    const grip = screen.getAllByTitle("drag to reorder")[0];
+    await fireEvent.pointerDown(grip, { clientY: 10 });
+    const nextReport = mkReport({
+      mods: [mkMod({ name: "A" }), mkMod({ name: "Fine", pinned: "bottom" })],
+      current_order: ["A", "Fine"],
+    });
+    await rerender({ report: nextReport });
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 200 }));
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  it("aborts the drag on pointercancel without calling onReorder", async () => {
+    const onReorder = vi.fn();
+    render(Ledger, {
+      props: {
+        report,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+      },
+    });
+    const grip = screen.getAllByTitle("drag to reorder")[0];
+    await fireEvent.pointerDown(grip, { clientY: 10 });
+    window.dispatchEvent(new Event("pointercancel"));
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 200 }));
+    expect(onReorder).not.toHaveBeenCalled();
+  });
 });

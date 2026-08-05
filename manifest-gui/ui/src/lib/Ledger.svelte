@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onDestroy, untrack } from "svelte";
   import type { Report } from "../types";
-  import { conflictCount, deriveZones, zoneNameLists } from "../types";
+  import { conflictCount, deriveZones, firstRowIndexes, zoneNameLists } from "../types";
   import { t } from "../copy.svelte";
   import LedgerRow from "./LedgerRow.svelte";
   import {
@@ -17,15 +18,23 @@
     onSelect,
     onPin,
     onReorder,
+    busy = false,
   }: {
     report: Report;
     selectedPath: string | null;
     onSelect: (path: string) => void;
     onPin: (name: string, position: "top" | "bottom" | null) => void;
     onReorder: (fore: string[], free: string[], aft: string[]) => void;
+    busy?: boolean;
   } = $props();
 
   const zones = $derived(deriveZones(report));
+  const names = $derived(zoneNameLists(zones));
+  const reps = $derived({
+    fore: firstRowIndexes(zones.fore),
+    free: firstRowIndexes(zones.free),
+    aft: firstRowIndexes(zones.aft),
+  });
   const loadedPaths = $derived(
     new Set([...zones.fore, ...zones.free, ...zones.aft].map((m) => m.path))
   );
@@ -44,10 +53,29 @@
   };
   let rowEls: Record<ZoneName, HTMLElement[]> = { fore: [], free: [], aft: [] };
 
+  // A drag started before an in-flight reorder lands would otherwise apply
+  // grab-time indexes to the freshly re-derived zones; bail out whenever the
+  // report identity changes while a drag is active. Read dragging untracked
+  // so this effect only reruns on report changes, not on every grab/drop.
+  $effect(() => {
+    report;
+    if (untrack(() => dragging)) {
+      cancelDrag();
+    }
+  });
+
+  onDestroy(() => {
+    endDragListeners();
+  });
+
+  // Row midpoints are built from one representative row per unique name (the
+  // first row of each duplicate block), so band slot indexes land in the
+  // same deduped-name space as the reorder lists.
   function bands(): ZoneBand[] {
     return (["fore", "free", "aft"] as ZoneName[]).map((zone) => {
       const rect = zoneEls[zone]?.getBoundingClientRect();
-      const mids = rowEls[zone]
+      const mids = reps[zone]
+        .map((i) => rowEls[zone][i])
         .filter(Boolean)
         .map((r) => {
           const b = r.getBoundingClientRect();
@@ -63,19 +91,32 @@
   }
 
   function grab(zone: ZoneName, index: number) {
+    if (busy) return;
     dragging = { zone, index };
     slot = null;
     window.addEventListener("pointermove", track);
     window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", cancelDrag);
   }
 
   function track(e: { clientY: number }) {
     slot = slotFromPointer(bands(), e.clientY);
   }
 
-  function drop(e: { clientY: number }) {
+  function endDragListeners() {
     window.removeEventListener("pointermove", track);
     window.removeEventListener("pointerup", drop);
+    window.removeEventListener("pointercancel", cancelDrag);
+  }
+
+  function cancelDrag() {
+    endDragListeners();
+    dragging = null;
+    slot = null;
+  }
+
+  function drop(e: { clientY: number }) {
+    endDragListeners();
     const source = dragging;
     dragging = null;
     const target = slot ?? slotFromPointer(bands(), e.clientY);
@@ -85,7 +126,7 @@
       target.zone === source.zone &&
       (target.index === source.index || target.index === source.index + 1);
     if (sameSlot) return;
-    const next = applyDrag(zoneNameLists(zones), source, target);
+    const next = applyDrag(names, source, target);
     onReorder(next.fore, next.free, next.aft);
   }
 </script>
@@ -98,7 +139,7 @@
       <div class="heading zone">{t("zoneFore")}</div>
     {/if}
     {#each zones.fore as mod, i (mod.path)}
-      {#if dragging && slot?.zone === "fore" && slot.index === i}
+      {#if dragging && slot?.zone === "fore" && reps.fore[slot.index] === i}
         <hr class="drop-slot" />
       {/if}
       <div bind:this={rowEls.fore[i]}>
@@ -109,11 +150,11 @@
           selected={mod.path === selectedPath}
           {onSelect}
           {onPin}
-          onGrab={() => grab("fore", i)}
+          onGrab={() => grab("fore", names.fore.indexOf(mod.name))}
         />
       </div>
     {/each}
-    {#if dragging && slot?.zone === "fore" && slot.index === zones.fore.length}
+    {#if dragging && slot?.zone === "fore" && slot.index === names.fore.length}
       <hr class="drop-slot" />
     {/if}
   </div>
@@ -122,7 +163,7 @@
   {/if}
   <div class="zone-box" bind:this={zoneEls.free}>
     {#each zones.free as mod, i (mod.path)}
-      {#if dragging && slot?.zone === "free" && slot.index === i}
+      {#if dragging && slot?.zone === "free" && reps.free[slot.index] === i}
         <hr class="drop-slot" />
       {/if}
       <div bind:this={rowEls.free[i]}>
@@ -133,11 +174,11 @@
           selected={mod.path === selectedPath}
           {onSelect}
           {onPin}
-          onGrab={() => grab("free", i)}
+          onGrab={() => grab("free", names.free.indexOf(mod.name))}
         />
       </div>
     {/each}
-    {#if dragging && slot?.zone === "free" && slot.index === zones.free.length}
+    {#if dragging && slot?.zone === "free" && slot.index === names.free.length}
       <hr class="drop-slot" />
     {/if}
   </div>
@@ -149,7 +190,7 @@
       <div class="heading zone">{t("zoneAft")}</div>
     {/if}
     {#each zones.aft as mod, i (mod.path)}
-      {#if dragging && slot?.zone === "aft" && slot.index === i}
+      {#if dragging && slot?.zone === "aft" && reps.aft[slot.index] === i}
         <hr class="drop-slot" />
       {/if}
       <div bind:this={rowEls.aft[i]}>
@@ -160,11 +201,11 @@
           selected={mod.path === selectedPath}
           {onSelect}
           {onPin}
-          onGrab={() => grab("aft", i)}
+          onGrab={() => grab("aft", names.aft.indexOf(mod.name))}
         />
       </div>
     {/each}
-    {#if dragging && slot?.zone === "aft" && slot.index === zones.aft.length}
+    {#if dragging && slot?.zone === "aft" && slot.index === names.aft.length}
       <hr class="drop-slot" />
     {/if}
   </div>
