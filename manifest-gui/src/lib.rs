@@ -136,6 +136,31 @@ fn set_mods_enabled_paths(
         .map(|c| (PathBuf::from(&c.path), c.enabled))
         .collect();
     manifest_core::toggle::set_enabled_batch(&list)?;
+    // Going ashore takes the lashings off: a pin naming a mod with no
+    // enabled copy left would linger invisibly and be dropped by the next
+    // reorder anyway, so drop it here, where the user can see it happen.
+    let enabled: std::collections::BTreeSet<String> = scan_library(mods_dir)
+        .into_iter()
+        .filter(|m| m.enabled)
+        .map(|m| m.name)
+        .collect();
+    let pins_path = pins::default_pins_path(config_path);
+    let pin_context = |e: String| format!("{e} (pins: {})", pins_path.display());
+    let current = pins::read_pins(&pins_path).map_err(&pin_context)?;
+    let keep = |names: &[String]| -> Vec<String> {
+        names
+            .iter()
+            .filter(|n| enabled.contains(*n))
+            .cloned()
+            .collect()
+    };
+    let pruned = Pins {
+        top: keep(&current.top),
+        bottom: keep(&current.bottom),
+    };
+    if pruned != current {
+        pins::write_pins(&pins_path, &pruned).map_err(&pin_context)?;
+    }
     scan_paths(config_path, mods_dir)
 }
 
@@ -389,6 +414,106 @@ mod tests {
         assert!(
             err.contains("mods"),
             "error should include the mods path: {err}"
+        );
+    }
+
+    #[test]
+    fn disabling_a_pinned_mod_removes_its_pin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let pins_path = pins::default_pins_path(&config);
+        manifest_core::pins::write_pins(
+            &pins_path,
+            &Pins {
+                top: vec!["Small".to_string()],
+                bottom: vec!["Big".to_string()],
+            },
+        )
+        .unwrap();
+        let report = set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: mods.join("Small.o2r").to_string_lossy().to_string(),
+                enabled: false,
+            }],
+        )
+        .unwrap();
+        let after = manifest_core::pins::read_pins(&pins_path).unwrap();
+        assert!(after.top.is_empty(), "ashore cargo keeps no lashings");
+        assert_eq!(after.bottom, vec!["Big".to_string()], "other pins survive");
+        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
+        assert_eq!(small.pinned, None);
+    }
+
+    #[test]
+    fn hauling_back_does_not_resurrect_the_pin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let pins_path = pins::default_pins_path(&config);
+        manifest_core::pins::write_pins(
+            &pins_path,
+            &Pins {
+                top: vec!["Small".to_string()],
+                bottom: vec![],
+            },
+        )
+        .unwrap();
+        let disable = mods.join("Small.o2r").to_string_lossy().to_string();
+        set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: disable,
+                enabled: false,
+            }],
+        )
+        .unwrap();
+        let enable = mods.join("Small.di2abled").to_string_lossy().to_string();
+        let report = set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: enable,
+                enabled: true,
+            }],
+        )
+        .unwrap();
+        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
+        assert!(small.enabled);
+        assert_eq!(small.pinned, None);
+    }
+
+    #[test]
+    fn pin_survives_while_a_duplicate_name_stays_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let twin_dir = mods.join("Elsewhere");
+        std::fs::create_dir_all(&twin_dir).unwrap();
+        write_zip(&twin_dir.join("Small.o2r"), &["c"]);
+        let pins_path = pins::default_pins_path(&config);
+        manifest_core::pins::write_pins(
+            &pins_path,
+            &Pins {
+                top: vec!["Small".to_string()],
+                bottom: vec![],
+            },
+        )
+        .unwrap();
+        set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: mods.join("Small.o2r").to_string_lossy().to_string(),
+                enabled: false,
+            }],
+        )
+        .unwrap();
+        let after = manifest_core::pins::read_pins(&pins_path).unwrap();
+        assert_eq!(
+            after.top,
+            vec!["Small".to_string()],
+            "the name still has an enabled copy aboard"
         );
     }
 
