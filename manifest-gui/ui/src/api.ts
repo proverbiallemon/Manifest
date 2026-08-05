@@ -24,6 +24,14 @@ export function setPin(
   return invoke("set_pin", { modName, position });
 }
 
+export function reorder(
+  fore: string[],
+  free: string[],
+  aft: string[]
+): Promise<Report> {
+  return invoke("reorder", { fore, free, aft });
+}
+
 export function setModsEnabled(changes: ModToggle[]): Promise<Report> {
   return invoke("set_mods_enabled", { changes });
 }

@@ -245,6 +245,21 @@ async fn set_pin(
 }
 
 #[tauri::command]
+async fn reorder(
+    fore: Vec<String>,
+    free: Vec<String>,
+    aft: Vec<String>,
+    state: tauri::State<'_, SharedPaths>,
+) -> Result<Report, String> {
+    let (config_path, mods_dir) = stored_paths(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        reorder_paths(&config_path, &mods_dir, &fore, &free, &aft)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn set_mods_enabled(
     changes: Vec<ModToggle>,
     state: tauri::State<'_, SharedPaths>,
@@ -292,6 +307,7 @@ pub fn run() {
             scan,
             apply_sort,
             set_pin,
+            reorder,
             set_mods_enabled,
             pick_file,
             pick_folder,
