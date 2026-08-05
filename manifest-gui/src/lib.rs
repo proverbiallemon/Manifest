@@ -88,6 +88,69 @@ fn set_pin_paths(
     scan_paths(config_path, mods_dir)
 }
 
+fn reorder_paths(
+    config_path: &Path,
+    mods_dir: &Path,
+    fore: &[String],
+    free: &[String],
+    aft: &[String],
+) -> Result<Report, String> {
+    let context = |e: String| {
+        format!(
+            "{e} (config: {}, mods: {})",
+            config_path.display(),
+            mods_dir.display()
+        )
+    };
+    if !mods_dir.is_dir() {
+        return Err(context("mods directory not found".to_string()));
+    }
+    let mods = scan_library(mods_dir);
+    let order = config::read_order(config_path).map_err(&context)?;
+    let enabled: std::collections::BTreeSet<&str> = mods
+        .iter()
+        .filter(|m| m.enabled)
+        .map(|m| m.name.as_str())
+        .collect();
+    // The loaded ledger: names that are both on disk enabled and in the
+    // current order. Stale names fail this filter and are dropped below.
+    let loaded: std::collections::BTreeSet<&str> = order
+        .iter()
+        .map(String::as_str)
+        .filter(|n| enabled.contains(n))
+        .collect();
+    let mut seen = std::collections::BTreeSet::new();
+    for name in fore.iter().chain(free).chain(aft) {
+        if !seen.insert(name.as_str()) {
+            return Err(context(format!(
+                "{name} appears twice in the new order; take inventory and retry"
+            )));
+        }
+        if !loaded.contains(name.as_str()) {
+            return Err(context(format!(
+                "{name} is not in the loaded ledger; take inventory and retry"
+            )));
+        }
+    }
+    if let Some(missing) = loaded.iter().find(|n| !seen.contains(*n)) {
+        return Err(context(format!(
+            "{missing} is missing from the new order; take inventory and retry"
+        )));
+    }
+    let new_order: Vec<String> = fore.iter().chain(free).chain(aft).cloned().collect();
+    config::write_order(config_path, &new_order).map_err(&context)?;
+    let pins_path = pins::default_pins_path(config_path);
+    pins::write_pins(
+        &pins_path,
+        &Pins {
+            top: fore.to_vec(),
+            bottom: aft.to_vec(),
+        },
+    )
+    .map_err(|e| format!("{e} (pins: {})", pins_path.display()))?;
+    scan_paths(config_path, mods_dir)
+}
+
 fn set_mods_enabled_paths(
     config_path: &Path,
     mods_dir: &Path,
@@ -433,6 +496,99 @@ mod tests {
         assert!(
             err.contains("junk.txt"),
             "error should name the path: {err}"
+        );
+    }
+
+    #[test]
+    fn reorder_paths_writes_concatenated_order_and_pins() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let report = reorder_paths(
+            &config,
+            &mods,
+            &["Big".to_string()],
+            &[],
+            &["Small".to_string()],
+        )
+        .unwrap();
+        let written = manifest_core::config::read_order(&config).unwrap();
+        assert_eq!(written, vec!["Big".to_string(), "Small".to_string()]);
+        assert_eq!(report.current_order, written);
+        let pins_file =
+            manifest_core::pins::read_pins(&pins::default_pins_path(&config)).unwrap();
+        assert_eq!(pins_file.top, vec!["Big".to_string()]);
+        assert_eq!(pins_file.bottom, vec!["Small".to_string()]);
+        let big = report.mods.iter().find(|m| m.name == "Big").unwrap();
+        assert_eq!(big.pinned.as_deref(), Some("top"));
+    }
+
+    #[test]
+    fn reorder_paths_drops_stale_names_from_the_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        std::fs::write(
+            &config,
+            r#"{"CVars":{"gSettings":{"EnabledMods":"Small|Stale|Big"}}}"#,
+        )
+        .unwrap();
+        reorder_paths(
+            &config,
+            &mods,
+            &[],
+            &["Big".to_string(), "Small".to_string()],
+            &[],
+        )
+        .unwrap();
+        let written = manifest_core::config::read_order(&config).unwrap();
+        assert_eq!(written, vec!["Big".to_string(), "Small".to_string()]);
+    }
+
+    #[test]
+    fn reorder_paths_rejects_unknown_and_duplicate_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let err = reorder_paths(
+            &config,
+            &mods,
+            &[],
+            &["Big".to_string(), "Nobody".to_string(), "Small".to_string()],
+            &[],
+        )
+        .unwrap_err();
+        assert!(err.contains("Nobody"), "error should name the mod: {err}");
+        let err = reorder_paths(
+            &config,
+            &mods,
+            &["Big".to_string()],
+            &["Big".to_string(), "Small".to_string()],
+            &[],
+        )
+        .unwrap_err();
+        assert!(err.contains("Big"), "error should name the duplicate: {err}");
+        assert!(err.contains("twice"), "error should say twice: {err}");
+    }
+
+    #[test]
+    fn reorder_paths_rejects_a_missing_loaded_mod() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[])
+            .unwrap_err();
+        assert!(err.contains("Small"), "error should name the missing mod: {err}");
+        // Nothing was written on failure.
+        let order = manifest_core::config::read_order(&config).unwrap();
+        assert_eq!(order, vec!["Small".to_string(), "Big".to_string()]);
+    }
+
+    #[test]
+    fn reorder_paths_errors_name_the_config_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[])
+            .unwrap_err();
+        assert!(
+            err.contains("shipofharkinian.json"),
+            "error should include the config path: {err}"
         );
     }
 }
