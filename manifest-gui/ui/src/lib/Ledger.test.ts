@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/svelte";
+import { render, screen, fireEvent } from "@testing-library/svelte";
 import Ledger from "./Ledger.svelte";
 import { mkMod, mkReport } from "./testReport";
 import { deriveZones } from "../types";
+
+vi.mock("./dragPlan", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./dragPlan")>();
+  return { ...real, slotFromPointer: () => ({ zone: "aft", index: 0 }) };
+});
 
 describe("Ledger", () => {
   it("renders duplicate-named files as separate rows with their own paths", () => {
@@ -18,6 +23,7 @@ describe("Ledger", () => {
       selectedPath: null,
       onSelect: vi.fn(),
       onPin: vi.fn(),
+      onReorder: vi.fn(),
     });
     expect(screen.getAllByText("Vanilla Equipment")).toHaveLength(2);
   });
@@ -36,6 +42,7 @@ describe("Ledger", () => {
       selectedPath: null,
       onSelect: vi.fn(),
       onPin: vi.fn(),
+      onReorder: vi.fn(),
     });
     expect(screen.getByText("NOT LOADED")).toBeTruthy();
     expect(screen.getAllByRole("row")).toHaveLength(3);
@@ -48,6 +55,7 @@ describe("Ledger", () => {
       selectedPath: null,
       onSelect: vi.fn(),
       onPin: vi.fn(),
+      onReorder: vi.fn(),
     });
     const bigRowBefore = screen.getByText("Big").closest('[role="row"]');
     expect(bigRowBefore).toBeTruthy();
@@ -76,6 +84,7 @@ describe("three-zone ledger", () => {
         selectedPath: null,
         onSelect: () => {},
         onPin: () => {},
+        onReorder: () => {},
       },
     });
     expect(screen.getByText("LASHED FORE, LOADS FIRST")).toBeTruthy();
@@ -88,7 +97,13 @@ describe("three-zone ledger", () => {
       current_order: ["Only"],
     });
     render(Ledger, {
-      props: { report: flat, selectedPath: null, onSelect: () => {}, onPin: () => {} },
+      props: {
+        report: flat,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder: () => {},
+      },
     });
     expect(screen.queryByText("LASHED FORE, LOADS FIRST")).toBeNull();
     expect(screen.queryByText("LASHED AFT, PREVAILS")).toBeNull();
@@ -101,6 +116,7 @@ describe("three-zone ledger", () => {
         selectedPath: null,
         onSelect: () => {},
         onPin: () => {},
+        onReorder: () => {},
       },
     });
     const rows = screen.getAllByRole("row");
@@ -109,5 +125,54 @@ describe("three-zone ledger", () => {
     expect(texts[0]).toContain("1");
     expect(texts[2]).toContain("Fine");
     expect(texts[2]).toContain("3");
+  });
+});
+
+describe("drag reordering", () => {
+  const report = mkReport({
+    mods: [
+      mkMod({ name: "A" }),
+      mkMod({ name: "B" }),
+      mkMod({ name: "Fine", pinned: "bottom" }),
+    ],
+    current_order: ["A", "B", "Fine"],
+  });
+
+  it("emits the post-drag zones through onReorder on drop", async () => {
+    const onReorder = vi.fn();
+    render(Ledger, {
+      props: {
+        report,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+      },
+    });
+    const grips = screen.getAllByTitle("drag to reorder");
+    await fireEvent.pointerDown(grips[0], { clientY: 10 });
+    window.dispatchEvent(new MouseEvent("pointermove", { clientY: 200 }));
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 200 }));
+    expect(onReorder).toHaveBeenCalledWith([], ["B"], ["A", "Fine"]);
+  });
+
+  it("a drop on the source slot does not call onReorder", async () => {
+    const onReorder = vi.fn();
+    render(Ledger, {
+      props: {
+        report: mkReport({
+          mods: [mkMod({ name: "Solo", pinned: "bottom" })],
+          current_order: ["Solo"],
+        }),
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+      },
+    });
+    const grip = screen.getByTitle("drag to reorder");
+    await fireEvent.pointerDown(grip, { clientY: 10 });
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 10 }));
+    expect(onReorder).not.toHaveBeenCalled();
   });
 });

@@ -1,19 +1,28 @@
 <script lang="ts">
   import type { Report } from "../types";
-  import { conflictCount, deriveZones } from "../types";
+  import { conflictCount, deriveZones, zoneNameLists } from "../types";
   import { t } from "../copy.svelte";
   import LedgerRow from "./LedgerRow.svelte";
+  import {
+    applyDrag,
+    slotFromPointer,
+    type DropSlot,
+    type ZoneBand,
+    type ZoneName,
+  } from "./dragPlan";
 
   let {
     report,
     selectedPath,
     onSelect,
     onPin,
+    onReorder,
   }: {
     report: Report;
     selectedPath: string | null;
     onSelect: (path: string) => void;
     onPin: (name: string, position: "top" | "bottom" | null) => void;
+    onReorder: (fore: string[], free: string[], aft: string[]) => void;
   } = $props();
 
   const zones = $derived(deriveZones(report));
@@ -25,49 +34,140 @@
     const all = [...zones.fore, ...zones.free, ...zones.aft];
     return new Map(all.map((m, i) => [m.path, i + 1]));
   });
+
+  let dragging = $state<DropSlot | null>(null);
+  let slot = $state<DropSlot | null>(null);
+  let zoneEls: Record<ZoneName, HTMLElement | null> = {
+    fore: null,
+    free: null,
+    aft: null,
+  };
+  let rowEls: Record<ZoneName, HTMLElement[]> = { fore: [], free: [], aft: [] };
+
+  function bands(): ZoneBand[] {
+    return (["fore", "free", "aft"] as ZoneName[]).map((zone) => {
+      const rect = zoneEls[zone]?.getBoundingClientRect();
+      const mids = rowEls[zone]
+        .filter(Boolean)
+        .map((r) => {
+          const b = r.getBoundingClientRect();
+          return (b.top + b.bottom) / 2;
+        });
+      return {
+        zone,
+        top: rect?.top ?? 0,
+        bottom: rect?.bottom ?? 0,
+        rowMids: mids,
+      };
+    });
+  }
+
+  function grab(zone: ZoneName, index: number) {
+    dragging = { zone, index };
+    slot = null;
+    window.addEventListener("pointermove", track);
+    window.addEventListener("pointerup", drop);
+  }
+
+  function track(e: { clientY: number }) {
+    slot = slotFromPointer(bands(), e.clientY);
+  }
+
+  function drop(e: { clientY: number }) {
+    window.removeEventListener("pointermove", track);
+    window.removeEventListener("pointerup", drop);
+    const source = dragging;
+    dragging = null;
+    const target = slot ?? slotFromPointer(bands(), e.clientY);
+    slot = null;
+    if (!source) return;
+    const sameSlot =
+      target.zone === source.zone &&
+      (target.index === source.index || target.index === source.index + 1);
+    if (sameSlot) return;
+    const next = applyDrag(zoneNameLists(zones), source, target);
+    onReorder(next.fore, next.free, next.aft);
+  }
 </script>
 
 <section aria-label="cargo ledger">
   <div class="heading">{t("ledgerHeading")}</div>
   <hr class="ledger-rule double" />
-  {#if zones.fore.length > 0}
-    <div class="heading zone">{t("zoneFore")}</div>
-    {#each zones.fore as mod (mod.path)}
-      <LedgerRow
-        {mod}
-        line={lineOf.get(mod.path) ?? null}
-        conflicts={conflictCount(report, mod.name)}
-        selected={mod.path === selectedPath}
-        {onSelect}
-        {onPin}
-      />
+  <div class="zone-box" bind:this={zoneEls.fore}>
+    {#if zones.fore.length > 0}
+      <div class="heading zone">{t("zoneFore")}</div>
+    {/if}
+    {#each zones.fore as mod, i (mod.path)}
+      {#if dragging && slot?.zone === "fore" && slot.index === i}
+        <hr class="drop-slot" />
+      {/if}
+      <div bind:this={rowEls.fore[i]}>
+        <LedgerRow
+          {mod}
+          line={lineOf.get(mod.path) ?? null}
+          conflicts={conflictCount(report, mod.name)}
+          selected={mod.path === selectedPath}
+          {onSelect}
+          {onPin}
+          onGrab={() => grab("fore", i)}
+        />
+      </div>
     {/each}
+    {#if dragging && slot?.zone === "fore" && slot.index === zones.fore.length}
+      <hr class="drop-slot" />
+    {/if}
+  </div>
+  {#if zones.fore.length > 0}
     <hr class="ledger-rule" />
   {/if}
-  {#each zones.free as mod (mod.path)}
-    <LedgerRow
-      {mod}
-      line={lineOf.get(mod.path) ?? null}
-      conflicts={conflictCount(report, mod.name)}
-      selected={mod.path === selectedPath}
-      {onSelect}
-      {onPin}
-    />
-  {/each}
+  <div class="zone-box" bind:this={zoneEls.free}>
+    {#each zones.free as mod, i (mod.path)}
+      {#if dragging && slot?.zone === "free" && slot.index === i}
+        <hr class="drop-slot" />
+      {/if}
+      <div bind:this={rowEls.free[i]}>
+        <LedgerRow
+          {mod}
+          line={lineOf.get(mod.path) ?? null}
+          conflicts={conflictCount(report, mod.name)}
+          selected={mod.path === selectedPath}
+          {onSelect}
+          {onPin}
+          onGrab={() => grab("free", i)}
+        />
+      </div>
+    {/each}
+    {#if dragging && slot?.zone === "free" && slot.index === zones.free.length}
+      <hr class="drop-slot" />
+    {/if}
+  </div>
   {#if zones.aft.length > 0}
     <hr class="ledger-rule" />
-    <div class="heading zone">{t("zoneAft")}</div>
-    {#each zones.aft as mod (mod.path)}
-      <LedgerRow
-        {mod}
-        line={lineOf.get(mod.path) ?? null}
-        conflicts={conflictCount(report, mod.name)}
-        selected={mod.path === selectedPath}
-        {onSelect}
-        {onPin}
-      />
-    {/each}
   {/if}
+  <div class="zone-box" bind:this={zoneEls.aft}>
+    {#if zones.aft.length > 0}
+      <div class="heading zone">{t("zoneAft")}</div>
+    {/if}
+    {#each zones.aft as mod, i (mod.path)}
+      {#if dragging && slot?.zone === "aft" && slot.index === i}
+        <hr class="drop-slot" />
+      {/if}
+      <div bind:this={rowEls.aft[i]}>
+        <LedgerRow
+          {mod}
+          line={lineOf.get(mod.path) ?? null}
+          conflicts={conflictCount(report, mod.name)}
+          selected={mod.path === selectedPath}
+          {onSelect}
+          {onPin}
+          onGrab={() => grab("aft", i)}
+        />
+      </div>
+    {/each}
+    {#if dragging && slot?.zone === "aft" && slot.index === zones.aft.length}
+      <hr class="drop-slot" />
+    {/if}
+  </div>
   {#if rest.length > 0}
     <div class="heading notloaded-gap">{t("notLoaded")}</div>
     <hr class="ledger-rule" />
@@ -97,5 +197,13 @@
   .zone {
     color: var(--ink-faded);
     letter-spacing: 2px;
+  }
+  .drop-slot {
+    border: 0;
+    border-top: 2px dashed var(--ink);
+    margin: 0 8px;
+  }
+  .zone-box {
+    min-height: 8px;
   }
 </style>

@@ -11,6 +11,7 @@
     selected = false,
     onSelect,
     onPin,
+    onGrab,
   }: {
     mod: ReportMod;
     line: number | null;
@@ -18,6 +19,7 @@
     selected?: boolean;
     onSelect: (path: string) => void;
     onPin: (name: string, position: "top" | "bottom" | null) => void;
+    onGrab?: (e: PointerEvent) => void;
   } = $props();
 </script>
 
@@ -30,7 +32,20 @@
   onclick={() => onSelect(mod.path)}
   onkeydown={(e) => e.key === "Enter" && onSelect(mod.path)}
 >
-  <span class="line faded">{line ?? ""}</span>
+  <span class="line faded">
+    {#if onGrab && line !== null}
+      <span
+        class="grip"
+        title="drag to reorder"
+        onpointerdown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onGrab(e);
+        }}>::</span
+      >
+    {/if}
+    {line ?? ""}
+  </span>
   <span class="name">
     {#if mod.pinned}
       <img class="pixel seal" src={sealUrl} alt="pinned {mod.pinned}" title="pinned {mod.pinned}" />
@@ -87,6 +102,11 @@
     width: 15px;
     height: 14px;
     vertical-align: -2px;
+  }
+  .grip {
+    cursor: grab;
+    user-select: none;
+    padding-right: 4px;
   }
   .pins {
     visibility: hidden;
