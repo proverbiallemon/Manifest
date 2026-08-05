@@ -10,6 +10,7 @@ export interface ZoneBand {
   top: number;
   bottom: number;
   rowMids: number[];
+  rowTops: number[];
 }
 
 // The slot index is how many row midpoints in the band sit above y, so a
@@ -24,6 +25,17 @@ export function slotFromPointer(bands: ZoneBand[], y: number): DropSlot {
     });
   }
   return { zone: band.zone, index: band.rowMids.filter((m) => y > m).length };
+}
+
+// Where the drop indicator sits for a slot: the top edge of the row the
+// drop would insert before, or the band's own edge for empty and end slots.
+export function slotY(bands: ZoneBand[], slot: DropSlot): number {
+  const band = bands.find((b) => b.zone === slot.zone);
+  if (!band) return 0;
+  if (band.rowTops.length === 0) return band.top;
+  return slot.index < band.rowTops.length
+    ? band.rowTops[slot.index]
+    : band.bottom;
 }
 
 type ZoneNames = { fore: string[]; free: string[]; aft: string[] };

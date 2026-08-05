@@ -156,6 +156,31 @@ describe("drag reordering", () => {
     expect(onReorder).toHaveBeenCalledWith([], ["B"], ["A", "Fine"]);
   });
 
+  it("lifts the grabbed row while dragging and settles it on drop", async () => {
+    const onReorder = vi.fn();
+    render(Ledger, {
+      props: {
+        report,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+        onReorder,
+      },
+    });
+    const grips = screen.getAllByTitle("drag to reorder");
+    await fireEvent.pointerDown(grips[1], { clientY: 10 });
+    const rows = screen.getAllByRole("row");
+    const bRow = rows.find((r) => r.textContent?.includes("B"))!;
+    expect(bRow.classList.contains("lifted")).toBe(true);
+    const others = rows.filter((r) => r !== bRow);
+    expect(others.some((r) => r.classList.contains("lifted"))).toBe(false);
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: 10 }));
+    await Promise.resolve();
+    expect(
+      screen.getAllByRole("row").some((r) => r.classList.contains("lifted"))
+    ).toBe(false);
+  });
+
   it("a drop on the source slot does not call onReorder", async () => {
     const onReorder = vi.fn();
     render(Ledger, {

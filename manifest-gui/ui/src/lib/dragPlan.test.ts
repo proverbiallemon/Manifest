@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { applyDrag, slotFromPointer, type ZoneBand } from "./dragPlan";
+import { applyDrag, slotFromPointer, slotY, type ZoneBand } from "./dragPlan";
 
 const bands: ZoneBand[] = [
-  { zone: "fore", top: 0, bottom: 40, rowMids: [20] },
-  { zone: "free", top: 40, bottom: 160, rowMids: [60, 100, 140] },
-  { zone: "aft", top: 160, bottom: 200, rowMids: [180] },
+  { zone: "fore", top: 0, bottom: 40, rowMids: [20], rowTops: [10] },
+  {
+    zone: "free",
+    top: 40,
+    bottom: 160,
+    rowMids: [60, 100, 140],
+    rowTops: [50, 90, 130],
+  },
+  { zone: "aft", top: 160, bottom: 200, rowMids: [180], rowTops: [170] },
 ];
 
 describe("slotFromPointer", () => {
@@ -21,12 +27,34 @@ describe("slotFromPointer", () => {
 
   it("lands in an empty zone band", () => {
     const withEmpty: ZoneBand[] = [
-      { zone: "fore", top: 0, bottom: 20, rowMids: [] },
-      { zone: "free", top: 20, bottom: 100, rowMids: [40, 80] },
-      { zone: "aft", top: 100, bottom: 120, rowMids: [] },
+      { zone: "fore", top: 0, bottom: 20, rowMids: [], rowTops: [] },
+      { zone: "free", top: 20, bottom: 100, rowMids: [40, 80], rowTops: [30, 70] },
+      { zone: "aft", top: 100, bottom: 120, rowMids: [], rowTops: [] },
     ];
     expect(slotFromPointer(withEmpty, 10)).toEqual({ zone: "fore", index: 0 });
     expect(slotFromPointer(withEmpty, 110)).toEqual({ zone: "aft", index: 0 });
+  });
+});
+
+describe("slotY", () => {
+  it("puts an interior slot at the top edge of the row it inserts before", () => {
+    expect(slotY(bands, { zone: "free", index: 0 })).toBe(50);
+    expect(slotY(bands, { zone: "free", index: 2 })).toBe(130);
+  });
+
+  it("puts the end-of-zone slot at the band bottom", () => {
+    expect(slotY(bands, { zone: "free", index: 3 })).toBe(160);
+    expect(slotY(bands, { zone: "aft", index: 1 })).toBe(200);
+  });
+
+  it("puts the only slot of an empty zone at the band top", () => {
+    const withEmpty: ZoneBand[] = [
+      { zone: "fore", top: 0, bottom: 20, rowMids: [], rowTops: [] },
+      { zone: "free", top: 20, bottom: 100, rowMids: [40], rowTops: [30] },
+      { zone: "aft", top: 100, bottom: 120, rowMids: [], rowTops: [] },
+    ];
+    expect(slotY(withEmpty, { zone: "fore", index: 0 })).toBe(0);
+    expect(slotY(withEmpty, { zone: "aft", index: 0 })).toBe(100);
   });
 });
 
