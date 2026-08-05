@@ -13,6 +13,10 @@ const STRINGS = {
   notLoaded: { ship: "NOT LOADED", plain: "NOT LOADED" },
   zoneFore: { ship: "LASHED FORE, LOADS FIRST", plain: "PINNED TOP, LOADS FIRST" },
   zoneAft: { ship: "LASHED AFT, PREVAILS", plain: "PINNED BOTTOM, WINS CONFLICTS" },
+  holdShifted: {
+    ship: "the hold shifted in transit; pins re-lashed to their stations",
+    plain: "the load order changed outside Manifest; pinned mods were regrouped",
+  },
   clearMod: { ship: "clear: no contested cargo", plain: "no conflicts" },
   clearStatus: { ship: "clear", plain: "clear" },
   prevailsOver: { ship: "prevails over", plain: "overrides" },

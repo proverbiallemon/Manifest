@@ -243,6 +243,41 @@ describe("App", () => {
   });
 });
 
+describe("hold shifted note", () => {
+  it("shows fine print when a pinned mod sits mid-order", async () => {
+    mocked.scan.mockResolvedValue(
+      mkReport({
+        mods: [
+          mkMod({ name: "A" }),
+          mkMod({ name: "P", pinned: "top" }),
+          mkMod({ name: "B" }),
+        ],
+        current_order: ["A", "P", "B"],
+        proposed_order: ["A", "P", "B"],
+      })
+    );
+    render(App);
+    expect(
+      await screen.findByText("the hold shifted in transit; pins re-lashed to their stations")
+    ).toBeTruthy();
+  });
+
+  it("stays hidden when zones match the order", async () => {
+    mocked.scan.mockResolvedValue(
+      mkReport({
+        mods: [mkMod({ name: "P", pinned: "top" }), mkMod({ name: "A" })],
+        current_order: ["P", "A"],
+        proposed_order: ["P", "A"],
+      })
+    );
+    render(App);
+    await screen.findAllByRole("row");
+    expect(
+      screen.queryByText("the hold shifted in transit; pins re-lashed to their stations")
+    ).toBeNull();
+  });
+});
+
 describe("physical pinning", () => {
   const report = mkReport({
     mods: [mkMod({ name: "A" }), mkMod({ name: "B" }), mkMod({ name: "C" })],

@@ -3,7 +3,7 @@
   import * as api from "./api";
   import { appState, setReport, setError } from "./state.svelte";
   import { t } from "./copy.svelte";
-  import { sortNeeded, deriveZones, zoneNameLists } from "./types";
+  import { sortNeeded, deriveZones, zoneNameLists, zonesShifted } from "./types";
   import type { ModToggle, Warning } from "./types";
   import Header from "./lib/Header.svelte";
   import WarningCards from "./lib/WarningCards.svelte";
@@ -229,6 +229,9 @@
         </button>
       </div>
     {/if}
+    {#if appState.report && zonesShifted(appState.report)}
+      <div class="shifted fine-print faded">{t("holdShifted")}</div>
+    {/if}
     <main>
       <div class="ledger-scroll">
         <Ledger
@@ -327,5 +330,8 @@
     display: flex;
     justify-content: flex-end;
     padding: 2px var(--pad) 6px;
+  }
+  .shifted {
+    padding: 0 var(--pad) 4px;
   }
 </style>
