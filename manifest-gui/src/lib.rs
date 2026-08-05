@@ -446,8 +446,7 @@ mod tests {
         let written = manifest_core::config::read_order(&config).unwrap();
         assert_eq!(written, vec!["Big".to_string(), "Small".to_string()]);
         assert_eq!(report.current_order, written);
-        let pins_file =
-            manifest_core::pins::read_pins(&pins::default_pins_path(&config)).unwrap();
+        let pins_file = manifest_core::pins::read_pins(&pins::default_pins_path(&config)).unwrap();
         assert_eq!(pins_file.top, vec!["Big".to_string()]);
         assert_eq!(pins_file.bottom, vec!["Small".to_string()]);
         let big = report.mods.iter().find(|m| m.name == "Big").unwrap();
@@ -496,7 +495,10 @@ mod tests {
             &[],
         )
         .unwrap_err();
-        assert!(err.contains("Big"), "error should name the duplicate: {err}");
+        assert!(
+            err.contains("Big"),
+            "error should name the duplicate: {err}"
+        );
         assert!(err.contains("twice"), "error should say twice: {err}");
     }
 
@@ -504,9 +506,11 @@ mod tests {
     fn reorder_paths_rejects_a_missing_loaded_mod() {
         let dir = tempfile::tempdir().unwrap();
         let (config, mods) = fixture(dir.path());
-        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[])
-            .unwrap_err();
-        assert!(err.contains("Small"), "error should name the missing mod: {err}");
+        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[]).unwrap_err();
+        assert!(
+            err.contains("Small"),
+            "error should name the missing mod: {err}"
+        );
         // Nothing was written on failure.
         let order = manifest_core::config::read_order(&config).unwrap();
         assert_eq!(order, vec!["Small".to_string(), "Big".to_string()]);
@@ -516,8 +520,7 @@ mod tests {
     fn reorder_paths_errors_name_the_config_path() {
         let dir = tempfile::tempdir().unwrap();
         let (config, mods) = fixture(dir.path());
-        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[])
-            .unwrap_err();
+        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[]).unwrap_err();
         assert!(
             err.contains("shipofharkinian.json"),
             "error should include the config path: {err}"
