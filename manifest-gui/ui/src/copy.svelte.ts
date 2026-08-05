@@ -11,6 +11,8 @@ const STRINGS = {
   settings: { ship: "settings", plain: "settings" },
   ledgerHeading: { ship: "LADING, IN ORDER OF LOAD", plain: "LOAD ORDER" },
   notLoaded: { ship: "NOT LOADED", plain: "NOT LOADED" },
+  zoneFore: { ship: "LASHED FORE, LOADS FIRST", plain: "PINNED TOP, LOADS FIRST" },
+  zoneAft: { ship: "LASHED AFT, PREVAILS", plain: "PINNED BOTTOM, WINS CONFLICTS" },
   clearMod: { ship: "clear: no contested cargo", plain: "no conflicts" },
   clearStatus: { ship: "clear", plain: "clear" },
   prevailsOver: { ship: "prevails over", plain: "overrides" },

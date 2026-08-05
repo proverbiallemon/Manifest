@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import Ledger from "./Ledger.svelte";
 import { mkMod, mkReport } from "./testReport";
+import { deriveZones } from "../types";
 
 describe("Ledger", () => {
   it("renders duplicate-named files as separate rows with their own paths", () => {
@@ -55,5 +56,58 @@ describe("Ledger", () => {
     });
     const bigRowAfter = screen.getByText("Big").closest('[role="row"]');
     expect(bigRowAfter).toBe(bigRowBefore);
+  });
+});
+
+describe("three-zone ledger", () => {
+  const zonedReport = mkReport({
+    mods: [
+      mkMod({ name: "Broad", pinned: "top" }),
+      mkMod({ name: "Mid" }),
+      mkMod({ name: "Fine", pinned: "bottom" }),
+    ],
+    current_order: ["Broad", "Mid", "Fine"],
+  });
+
+  it("renders fore and aft zone headings when those zones hold cargo", () => {
+    render(Ledger, {
+      props: {
+        report: zonedReport,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+      },
+    });
+    expect(screen.getByText("LASHED FORE, LOADS FIRST")).toBeTruthy();
+    expect(screen.getByText("LASHED AFT, PREVAILS")).toBeTruthy();
+  });
+
+  it("hides zone headings when no mods are pinned", () => {
+    const flat = mkReport({
+      mods: [mkMod({ name: "Only" })],
+      current_order: ["Only"],
+    });
+    render(Ledger, {
+      props: { report: flat, selectedPath: null, onSelect: () => {}, onPin: () => {} },
+    });
+    expect(screen.queryByText("LASHED FORE, LOADS FIRST")).toBeNull();
+    expect(screen.queryByText("LASHED AFT, PREVAILS")).toBeNull();
+  });
+
+  it("numbers lines continuously across zones in load order", () => {
+    render(Ledger, {
+      props: {
+        report: zonedReport,
+        selectedPath: null,
+        onSelect: () => {},
+        onPin: () => {},
+      },
+    });
+    const rows = screen.getAllByRole("row");
+    const texts = rows.map((r) => r.textContent ?? "");
+    expect(texts[0]).toContain("Broad");
+    expect(texts[0]).toContain("1");
+    expect(texts[2]).toContain("Fine");
+    expect(texts[2]).toContain("3");
   });
 });
