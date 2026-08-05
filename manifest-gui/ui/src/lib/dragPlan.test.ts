@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { applyDrag, slotFromPointer, slotY, type ZoneBand } from "./dragPlan";
+import {
+  applyDrag,
+  blockHeight,
+  rowShifts,
+  settleY,
+  slotFromPointer,
+  slotY,
+  type ZoneBand,
+} from "./dragPlan";
 
 const bands: ZoneBand[] = [
   { zone: "fore", top: 0, bottom: 40, rowMids: [20], rowTops: [10] },
@@ -55,6 +63,66 @@ describe("slotY", () => {
     ];
     expect(slotY(withEmpty, { zone: "fore", index: 0 })).toBe(0);
     expect(slotY(withEmpty, { zone: "aft", index: 0 })).toBe(100);
+  });
+});
+
+describe("blockHeight", () => {
+  it("measures a block from its top to the next block's top", () => {
+    expect(blockHeight(bands, { zone: "free", index: 1 })).toBe(40);
+  });
+
+  it("measures the last block in a zone to the band bottom", () => {
+    expect(blockHeight(bands, { zone: "free", index: 2 })).toBe(30);
+    expect(blockHeight(bands, { zone: "aft", index: 0 })).toBe(30);
+  });
+});
+
+describe("rowShifts", () => {
+  it("slides rows between the source and a lower target up by the block height", () => {
+    const shifts = rowShifts(
+      bands,
+      { zone: "free", index: 0 },
+      { zone: "free", index: 3 }
+    );
+    expect(shifts.free).toEqual([0, -40, -40]);
+    expect(shifts.fore).toEqual([0]);
+    expect(shifts.aft).toEqual([0]);
+  });
+
+  it("slides rows between a higher target and the source down, across zones", () => {
+    const shifts = rowShifts(
+      bands,
+      { zone: "free", index: 2 },
+      { zone: "fore", index: 1 }
+    );
+    expect(shifts.free).toEqual([30, 30, 0]);
+    expect(shifts.fore).toEqual([0]);
+    expect(shifts.aft).toEqual([0]);
+  });
+
+  it("produces no shifts for the source's own slot or the next slot", () => {
+    const same = rowShifts(
+      bands,
+      { zone: "free", index: 1 },
+      { zone: "free", index: 1 }
+    );
+    expect(same.free).toEqual([0, 0, 0]);
+    const next = rowShifts(
+      bands,
+      { zone: "free", index: 1 },
+      { zone: "free", index: 2 }
+    );
+    expect(next.free).toEqual([0, 0, 0]);
+  });
+});
+
+describe("settleY", () => {
+  it("glides down to a lower target minus the block's own height", () => {
+    expect(settleY(bands, { zone: "free", index: 0 }, { zone: "free", index: 3 })).toBe(70);
+  });
+
+  it("glides up to a higher target directly", () => {
+    expect(settleY(bands, { zone: "free", index: 0 }, { zone: "fore", index: 1 })).toBe(-10);
   });
 });
 

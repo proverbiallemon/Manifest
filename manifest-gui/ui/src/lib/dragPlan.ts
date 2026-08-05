@@ -38,6 +38,58 @@ export function slotY(bands: ZoneBand[], slot: DropSlot): number {
     : band.bottom;
 }
 
+// A name block's visual height: from its representative row's top to the
+// next block's top, or to the band bottom for the last block in a zone.
+export function blockHeight(bands: ZoneBand[], source: DropSlot): number {
+  const band = bands.find((b) => b.zone === source.zone);
+  if (!band) return 0;
+  const top = band.rowTops[source.index] ?? band.top;
+  const next = band.rowTops[source.index + 1] ?? band.bottom;
+  return next - top;
+}
+
+// While dragging, every non-source block slides by the source block's
+// height to open a gap at the target slot: blocks strictly between the
+// source and a lower target slide up, blocks at or below a higher target
+// (and above the source) slide down. Pure geometry against the captured
+// layout, so it works across zones without any zone bookkeeping.
+export function rowShifts(
+  bands: ZoneBand[],
+  source: DropSlot,
+  target: DropSlot
+): Record<ZoneName, number[]> {
+  const h = blockHeight(bands, source);
+  const sourceBand = bands.find((b) => b.zone === source.zone);
+  const sourceTop = sourceBand?.rowTops[source.index] ?? 0;
+  const targetY = slotY(bands, target);
+  const out = { fore: [] as number[], free: [] as number[], aft: [] as number[] };
+  for (const band of bands) {
+    out[band.zone] = band.rowTops.map((t, i) => {
+      if (band.zone === source.zone && i === source.index) return 0;
+      if (t > sourceTop && t < targetY) return -h;
+      if (t >= targetY && t < sourceTop) return h;
+      return 0;
+    });
+  }
+  return out;
+}
+
+// Where the dragged block's top settles after a drop, relative to where it
+// started: a lower target loses the block's own height because the block
+// vacates its old spot above the gap.
+export function settleY(
+  bands: ZoneBand[],
+  source: DropSlot,
+  target: DropSlot
+): number {
+  const band = bands.find((b) => b.zone === source.zone);
+  const sourceTop = band?.rowTops[source.index] ?? 0;
+  const targetY = slotY(bands, target);
+  return targetY > sourceTop
+    ? targetY - blockHeight(bands, source) - sourceTop
+    : targetY - sourceTop;
+}
+
 type ZoneNames = { fore: string[]; free: string[]; aft: string[] };
 
 // Slot indexes refer to the lists as rendered, with the dragged row still

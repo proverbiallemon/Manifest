@@ -156,9 +156,9 @@ describe("drag reordering", () => {
     expect(onReorder).toHaveBeenCalledWith([], ["B"], ["A", "Fine"]);
   });
 
-  it("lifts the grabbed row while dragging and settles it on drop", async () => {
+  it("lifts the grabbed row, keeps it lifted while settling, and clears on the next report", async () => {
     const onReorder = vi.fn();
-    render(Ledger, {
+    const { rerender } = render(Ledger, {
       props: {
         report,
         selectedPath: null,
@@ -174,8 +174,23 @@ describe("drag reordering", () => {
     expect(bRow.classList.contains("lifted")).toBe(true);
     const others = rows.filter((r) => r !== bRow);
     expect(others.some((r) => r.classList.contains("lifted"))).toBe(false);
+    // The mocked slot targets aft, so the drop settles rather than resets.
     window.dispatchEvent(new MouseEvent("pointerup", { clientY: 10 }));
     await Promise.resolve();
+    expect(onReorder).toHaveBeenCalled();
+    expect(
+      screen.getAllByRole("row").some((r) => r.classList.contains("lifted"))
+    ).toBe(true);
+    await rerender({
+      report: mkReport({
+        mods: [
+          mkMod({ name: "A" }),
+          mkMod({ name: "Fine", pinned: "bottom" }),
+          mkMod({ name: "B", pinned: "bottom" }),
+        ],
+        current_order: ["A", "B", "Fine"],
+      }),
+    });
     expect(
       screen.getAllByRole("row").some((r) => r.classList.contains("lifted"))
     ).toBe(false);
