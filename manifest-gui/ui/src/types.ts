@@ -91,3 +91,48 @@ export function overlapsFor(report: Report, modName: string): OverlapSummary {
     contestedAssets: assets,
   };
 }
+
+export interface Zones {
+  fore: ReportMod[];
+  free: ReportMod[];
+  aft: ReportMod[];
+}
+
+// Loaded mods (enabled and present in EnabledMods) grouped into physical
+// zones. Display order within each zone follows current_order; duplicate
+// names keep one row per file.
+export function deriveZones(report: Report): Zones {
+  const orderIndex = new Map(report.current_order.map((n, i) => [n, i]));
+  const loaded = report.mods
+    .filter((m) => m.enabled && orderIndex.has(m.name))
+    .slice()
+    .sort(
+      (a, b) =>
+        orderIndex.get(a.name)! - orderIndex.get(b.name)! ||
+        a.path.localeCompare(b.path)
+    );
+  return {
+    fore: loaded.filter((m) => m.pinned === "top"),
+    free: loaded.filter((m) => m.pinned === null),
+    aft: loaded.filter((m) => m.pinned === "bottom"),
+  };
+}
+
+export function zoneNameLists(z: Zones): {
+  fore: string[];
+  free: string[];
+  aft: string[];
+} {
+  const dedupe = (mods: ReportMod[]) => [...new Set(mods.map((m) => m.name))];
+  return { fore: dedupe(z.fore), free: dedupe(z.free), aft: dedupe(z.aft) };
+}
+
+// True when the actual EnabledMods sequence no longer equals fore+free+aft,
+// which happens when the game's boot rewrite moves things behind our back.
+export function zonesShifted(report: Report): boolean {
+  const names = zoneNameLists(deriveZones(report));
+  const zoneSeq = [...names.fore, ...names.free, ...names.aft];
+  const loadable = new Set(zoneSeq);
+  const actual = report.current_order.filter((n) => loadable.has(n));
+  return JSON.stringify(actual) !== JSON.stringify(zoneSeq);
+}
