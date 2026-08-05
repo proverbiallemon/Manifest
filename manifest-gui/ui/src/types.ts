@@ -32,6 +32,7 @@ export interface Report {
   current_order: string[];
   proposed_order: string[];
   moves: Move[];
+  sort_held_by_pins: boolean;
 }
 
 export interface StoredSettings {

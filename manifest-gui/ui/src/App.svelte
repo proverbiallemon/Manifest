@@ -199,6 +199,7 @@
   <Header
     configPath={appState.configPath}
     sortNeeded={appState.report ? sortNeeded(appState.report) : false}
+    sortHeld={appState.report?.sort_held_by_pins ?? false}
     moveCount={appState.report?.moves.length ?? 0}
     loading={appState.loading}
     damaged={appState.error !== null}

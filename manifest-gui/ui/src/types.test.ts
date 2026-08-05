@@ -13,6 +13,7 @@ const base: Report = {
   current_order: ["Big", "Small"],
   proposed_order: ["Big", "Small"],
   moves: [],
+  sort_held_by_pins: false,
 };
 
 describe("conflictCount", () => {
