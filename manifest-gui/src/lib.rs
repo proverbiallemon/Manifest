@@ -63,28 +63,66 @@ fn apply_sort_paths(config_path: &Path, mods_dir: &Path) -> Result<Report, Strin
     scan_paths(config_path, mods_dir)
 }
 
-fn set_pin_paths(
+fn reorder_paths(
     config_path: &Path,
     mods_dir: &Path,
-    mod_name: &str,
-    position: Option<&str>,
+    fore: &[String],
+    free: &[String],
+    aft: &[String],
 ) -> Result<Report, String> {
-    let pins_path = pins::default_pins_path(config_path);
-    let context = |e: String| format!("{e} (pins: {})", pins_path.display());
-    let current = pins::read_pins(&pins_path).map_err(&context)?;
-    let mut top: Vec<String> = current.top.into_iter().filter(|n| n != mod_name).collect();
-    let mut bottom: Vec<String> = current
-        .bottom
-        .into_iter()
-        .filter(|n| n != mod_name)
-        .collect();
-    match position {
-        Some("top") => top.push(mod_name.to_string()),
-        Some("bottom") => bottom.push(mod_name.to_string()),
-        None => {}
-        Some(other) => return Err(format!("unknown pin position: {other}")),
+    let context = |e: String| {
+        format!(
+            "{e} (config: {}, mods: {})",
+            config_path.display(),
+            mods_dir.display()
+        )
+    };
+    if !mods_dir.is_dir() {
+        return Err(context("mods directory not found".to_string()));
     }
-    pins::write_pins(&pins_path, &Pins { top, bottom }).map_err(&context)?;
+    let mods = scan_library(mods_dir);
+    let order = config::read_order(config_path).map_err(&context)?;
+    let enabled: std::collections::BTreeSet<&str> = mods
+        .iter()
+        .filter(|m| m.enabled)
+        .map(|m| m.name.as_str())
+        .collect();
+    // The loaded ledger: names that are both on disk enabled and in the
+    // current order. Stale names fail this filter and are dropped below.
+    let loaded: std::collections::BTreeSet<&str> = order
+        .iter()
+        .map(String::as_str)
+        .filter(|n| enabled.contains(n))
+        .collect();
+    let mut seen = std::collections::BTreeSet::new();
+    for name in fore.iter().chain(free).chain(aft) {
+        if !seen.insert(name.as_str()) {
+            return Err(context(format!(
+                "{name} appears twice in the new order; take inventory and retry"
+            )));
+        }
+        if !loaded.contains(name.as_str()) {
+            return Err(context(format!(
+                "{name} is not in the loaded ledger; take inventory and retry"
+            )));
+        }
+    }
+    if let Some(missing) = loaded.iter().find(|n| !seen.contains(*n)) {
+        return Err(context(format!(
+            "{missing} is missing from the new order; take inventory and retry"
+        )));
+    }
+    let new_order: Vec<String> = fore.iter().chain(free).chain(aft).cloned().collect();
+    config::write_order(config_path, &new_order).map_err(&context)?;
+    let pins_path = pins::default_pins_path(config_path);
+    pins::write_pins(
+        &pins_path,
+        &Pins {
+            top: fore.to_vec(),
+            bottom: aft.to_vec(),
+        },
+    )
+    .map_err(|e| format!("{e} (pins: {})", pins_path.display()))?;
     scan_paths(config_path, mods_dir)
 }
 
@@ -98,6 +136,31 @@ fn set_mods_enabled_paths(
         .map(|c| (PathBuf::from(&c.path), c.enabled))
         .collect();
     manifest_core::toggle::set_enabled_batch(&list)?;
+    // Going ashore takes the lashings off: a pin naming a mod with no
+    // enabled copy left would linger invisibly and be dropped by the next
+    // reorder anyway, so drop it here, where the user can see it happen.
+    let enabled: std::collections::BTreeSet<String> = scan_library(mods_dir)
+        .into_iter()
+        .filter(|m| m.enabled)
+        .map(|m| m.name)
+        .collect();
+    let pins_path = pins::default_pins_path(config_path);
+    let pin_context = |e: String| format!("{e} (pins: {})", pins_path.display());
+    let current = pins::read_pins(&pins_path).map_err(&pin_context)?;
+    let keep = |names: &[String]| -> Vec<String> {
+        names
+            .iter()
+            .filter(|n| enabled.contains(*n))
+            .cloned()
+            .collect()
+    };
+    let pruned = Pins {
+        top: keep(&current.top),
+        bottom: keep(&current.bottom),
+    };
+    if pruned != current {
+        pins::write_pins(&pins_path, &pruned).map_err(&pin_context)?;
+    }
     scan_paths(config_path, mods_dir)
 }
 
@@ -168,14 +231,15 @@ async fn apply_sort(state: tauri::State<'_, SharedPaths>) -> Result<Report, Stri
 }
 
 #[tauri::command]
-async fn set_pin(
-    mod_name: String,
-    position: Option<String>,
+async fn reorder(
+    fore: Vec<String>,
+    free: Vec<String>,
+    aft: Vec<String>,
     state: tauri::State<'_, SharedPaths>,
 ) -> Result<Report, String> {
     let (config_path, mods_dir) = stored_paths(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
-        set_pin_paths(&config_path, &mods_dir, &mod_name, position.as_deref())
+        reorder_paths(&config_path, &mods_dir, &fore, &free, &aft)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -228,7 +292,7 @@ pub fn run() {
             load_settings,
             scan,
             apply_sort,
-            set_pin,
+            reorder,
             set_mods_enabled,
             pick_file,
             pick_folder,
@@ -296,33 +360,6 @@ mod tests {
     }
 
     #[test]
-    fn set_pin_paths_round_trips_through_pins_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let (config, mods) = fixture(dir.path());
-        let report = set_pin_paths(&config, &mods, "Small", Some("top")).unwrap();
-        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
-        assert_eq!(small.pinned.as_deref(), Some("top"));
-        assert_eq!(
-            report.proposed_order.first().map(String::as_str),
-            Some("Small")
-        );
-        let report = set_pin_paths(&config, &mods, "Small", None).unwrap();
-        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
-        assert_eq!(small.pinned, None);
-    }
-
-    #[test]
-    fn set_pin_paths_rejects_bad_position() {
-        let dir = tempfile::tempdir().unwrap();
-        let (config, mods) = fixture(dir.path());
-        let err = set_pin_paths(&config, &mods, "Small", Some("sideways")).unwrap_err();
-        assert!(
-            err.contains("position"),
-            "error should name position: {err}"
-        );
-    }
-
-    #[test]
     fn settings_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let stored = StoredSettings {
@@ -344,23 +381,6 @@ mod tests {
         assert!(
             err.contains("shipofharkinian.json"),
             "error should include the config path: {err}"
-        );
-    }
-
-    #[test]
-    fn set_pin_errors_name_the_pins_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let (config, mods) = fixture(dir.path());
-        let pins_path = pins::default_pins_path(&config);
-        std::fs::write(
-            &pins_path,
-            r#"{"schema_version":1,"top":"nope","bottom":[]}"#,
-        )
-        .unwrap();
-        let err = set_pin_paths(&config, &mods, "Small", Some("top")).unwrap_err();
-        assert!(
-            err.contains("manifest-pins.json"),
-            "error should include the pins path: {err}"
         );
     }
 
@@ -394,6 +414,106 @@ mod tests {
         assert!(
             err.contains("mods"),
             "error should include the mods path: {err}"
+        );
+    }
+
+    #[test]
+    fn disabling_a_pinned_mod_removes_its_pin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let pins_path = pins::default_pins_path(&config);
+        manifest_core::pins::write_pins(
+            &pins_path,
+            &Pins {
+                top: vec!["Small".to_string()],
+                bottom: vec!["Big".to_string()],
+            },
+        )
+        .unwrap();
+        let report = set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: mods.join("Small.o2r").to_string_lossy().to_string(),
+                enabled: false,
+            }],
+        )
+        .unwrap();
+        let after = manifest_core::pins::read_pins(&pins_path).unwrap();
+        assert!(after.top.is_empty(), "ashore cargo keeps no lashings");
+        assert_eq!(after.bottom, vec!["Big".to_string()], "other pins survive");
+        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
+        assert_eq!(small.pinned, None);
+    }
+
+    #[test]
+    fn hauling_back_does_not_resurrect_the_pin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let pins_path = pins::default_pins_path(&config);
+        manifest_core::pins::write_pins(
+            &pins_path,
+            &Pins {
+                top: vec!["Small".to_string()],
+                bottom: vec![],
+            },
+        )
+        .unwrap();
+        let disable = mods.join("Small.o2r").to_string_lossy().to_string();
+        set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: disable,
+                enabled: false,
+            }],
+        )
+        .unwrap();
+        let enable = mods.join("Small.di2abled").to_string_lossy().to_string();
+        let report = set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: enable,
+                enabled: true,
+            }],
+        )
+        .unwrap();
+        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
+        assert!(small.enabled);
+        assert_eq!(small.pinned, None);
+    }
+
+    #[test]
+    fn pin_survives_while_a_duplicate_name_stays_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let twin_dir = mods.join("Elsewhere");
+        std::fs::create_dir_all(&twin_dir).unwrap();
+        write_zip(&twin_dir.join("Small.o2r"), &["c"]);
+        let pins_path = pins::default_pins_path(&config);
+        manifest_core::pins::write_pins(
+            &pins_path,
+            &Pins {
+                top: vec!["Small".to_string()],
+                bottom: vec![],
+            },
+        )
+        .unwrap();
+        set_mods_enabled_paths(
+            &config,
+            &mods,
+            &[ModToggle {
+                path: mods.join("Small.o2r").to_string_lossy().to_string(),
+                enabled: false,
+            }],
+        )
+        .unwrap();
+        let after = manifest_core::pins::read_pins(&pins_path).unwrap();
+        assert_eq!(
+            after.top,
+            vec!["Small".to_string()],
+            "the name still has an enabled copy aboard"
         );
     }
 
@@ -433,6 +553,123 @@ mod tests {
         assert!(
             err.contains("junk.txt"),
             "error should name the path: {err}"
+        );
+    }
+
+    #[test]
+    fn reorder_paths_writes_concatenated_order_and_pins() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let report = reorder_paths(
+            &config,
+            &mods,
+            &["Big".to_string()],
+            &[],
+            &["Small".to_string()],
+        )
+        .unwrap();
+        let written = manifest_core::config::read_order(&config).unwrap();
+        assert_eq!(written, vec!["Big".to_string(), "Small".to_string()]);
+        assert_eq!(report.current_order, written);
+        let pins_file = manifest_core::pins::read_pins(&pins::default_pins_path(&config)).unwrap();
+        assert_eq!(pins_file.top, vec!["Big".to_string()]);
+        assert_eq!(pins_file.bottom, vec!["Small".to_string()]);
+        let big = report.mods.iter().find(|m| m.name == "Big").unwrap();
+        assert_eq!(big.pinned.as_deref(), Some("top"));
+    }
+
+    #[test]
+    fn reorder_paths_drops_stale_names_from_the_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        std::fs::write(
+            &config,
+            r#"{"CVars":{"gSettings":{"EnabledMods":"Small|Stale|Big"}}}"#,
+        )
+        .unwrap();
+        reorder_paths(
+            &config,
+            &mods,
+            &[],
+            &["Big".to_string(), "Small".to_string()],
+            &[],
+        )
+        .unwrap();
+        let written = manifest_core::config::read_order(&config).unwrap();
+        assert_eq!(written, vec!["Big".to_string(), "Small".to_string()]);
+    }
+
+    #[test]
+    fn reorder_paths_rejects_unknown_and_duplicate_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let err = reorder_paths(
+            &config,
+            &mods,
+            &[],
+            &["Big".to_string(), "Nobody".to_string(), "Small".to_string()],
+            &[],
+        )
+        .unwrap_err();
+        assert!(err.contains("Nobody"), "error should name the mod: {err}");
+        let err = reorder_paths(
+            &config,
+            &mods,
+            &["Big".to_string()],
+            &["Big".to_string(), "Small".to_string()],
+            &[],
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("Big"),
+            "error should name the duplicate: {err}"
+        );
+        assert!(err.contains("twice"), "error should say twice: {err}");
+    }
+
+    #[test]
+    fn reorder_paths_rejects_a_missing_loaded_mod() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[]).unwrap_err();
+        assert!(
+            err.contains("Small"),
+            "error should name the missing mod: {err}"
+        );
+        // Nothing was written on failure.
+        let order = manifest_core::config::read_order(&config).unwrap();
+        assert_eq!(order, vec!["Small".to_string(), "Big".to_string()]);
+    }
+
+    #[test]
+    fn reorder_paths_errors_name_the_config_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let err = reorder_paths(&config, &mods, &[], &["Big".to_string()], &[]).unwrap_err();
+        assert!(
+            err.contains("shipofharkinian.json"),
+            "error should include the config path: {err}"
+        );
+    }
+
+    #[test]
+    fn reorder_errors_name_the_pins_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let pins_dir = pins::default_pins_path(&config);
+        // Make the pins path unwritable by occupying it with a directory.
+        std::fs::create_dir(&pins_dir).unwrap();
+        let err = reorder_paths(
+            &config,
+            &mods,
+            &[],
+            &["Small".to_string(), "Big".to_string()],
+            &[],
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("manifest-pins.json"),
+            "error should include the pins path: {err}"
         );
     }
 }

@@ -3,7 +3,7 @@
   import * as api from "./api";
   import { appState, setReport, setError } from "./state.svelte";
   import { t } from "./copy.svelte";
-  import { sortNeeded } from "./types";
+  import { sortNeeded, deriveZones, zoneNameLists, zonesShifted } from "./types";
   import type { ModToggle, Warning } from "./types";
   import Header from "./lib/Header.svelte";
   import WarningCards from "./lib/WarningCards.svelte";
@@ -94,16 +94,32 @@
     }
   }
 
-  async function pin(name: string, position: "top" | "bottom" | null) {
+  async function doReorder(fore: string[], free: string[], aft: string[]) {
     if (appState.loading) return;
     appState.loading = true;
     try {
-      setReport(await api.setPin(name, position));
+      setReport(await api.reorder(fore, free, aft));
     } catch (e) {
       setError(String(e));
     } finally {
       appState.loading = false;
     }
+  }
+
+  async function pin(name: string, position: "top" | "bottom" | null) {
+    if (!appState.report || appState.loading) return;
+    const names = zoneNameLists(deriveZones(appState.report));
+    const from =
+      names.fore.includes(name) ? "fore"
+      : names.aft.includes(name) ? "aft"
+      : "free";
+    if (position === null && from === "free") return;
+    names[from] = names[from].filter((n) => n !== name);
+    if (position === "top") names.fore.push(name);
+    else if (position === "bottom") names.aft.unshift(name);
+    else if (from === "fore") names.free.unshift(name);
+    else names.free.push(name);
+    await doReorder(names.fore, names.free, names.aft);
   }
 
   async function stampWarning(changes: ModToggle[]) {
@@ -183,6 +199,7 @@
   <Header
     configPath={appState.configPath}
     sortNeeded={appState.report ? sortNeeded(appState.report) : false}
+    sortHeld={appState.report?.sort_held_by_pins ?? false}
     moveCount={appState.report?.moves.length ?? 0}
     loading={appState.loading}
     damaged={appState.error !== null}
@@ -213,6 +230,9 @@
         </button>
       </div>
     {/if}
+    {#if appState.report && zonesShifted(appState.report)}
+      <div class="shifted fine-print faded">{t("holdShifted")}</div>
+    {/if}
     <main>
       <div class="ledger-scroll">
         <Ledger
@@ -220,6 +240,8 @@
           selectedPath={appState.selectedPath}
           onSelect={(p) => (appState.selectedPath = p)}
           onPin={pin}
+          onReorder={doReorder}
+          busy={appState.loading}
         />
       </div>
       <DetailPane report={appState.report} selectedPath={appState.selectedPath} onEnable={haulBack} />
@@ -310,5 +332,8 @@
     display: flex;
     justify-content: flex-end;
     padding: 2px var(--pad) 6px;
+  }
+  .shifted {
+    padding: 0 var(--pad) 4px;
   }
 </style>

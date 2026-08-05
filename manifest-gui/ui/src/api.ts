@@ -17,11 +17,12 @@ export function applySort(): Promise<Report> {
   return invoke("apply_sort");
 }
 
-export function setPin(
-  modName: string,
-  position: "top" | "bottom" | null
+export function reorder(
+  fore: string[],
+  free: string[],
+  aft: string[]
 ): Promise<Report> {
-  return invoke("set_pin", { modName, position });
+  return invoke("reorder", { fore, free, aft });
 }
 
 export function setModsEnabled(changes: ModToggle[]): Promise<Report> {

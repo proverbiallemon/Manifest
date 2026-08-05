@@ -31,12 +31,33 @@ pub struct Report {
     pub current_order: Vec<String>,
     pub proposed_order: Vec<String>,
     pub moves: Vec<Move>,
+    // True when the current arrangement only looks optimal because pins are
+    // holding cargo the sorter would otherwise move. Additive field; schema
+    // version is unchanged.
+    pub sort_held_by_pins: bool,
 }
 
 pub fn build(mods: &[ModFile], order: &[String], pins: &Pins) -> Report {
     let graph = ConflictGraph::build(mods, order);
     let warnings = detect(mods, order, &graph);
     let sort = propose(mods, order, pins);
+    // Stale names linger in the order until the game's next boot; compare
+    // only names that can actually load, mirroring the GUI's sortNeeded.
+    let loadable: std::collections::BTreeSet<&str> = mods
+        .iter()
+        .filter(|m| m.enabled)
+        .map(|m| m.name.as_str())
+        .collect();
+    fn filt<'a>(o: &'a [String], loadable: &std::collections::BTreeSet<&str>) -> Vec<&'a str> {
+        o.iter()
+            .map(String::as_str)
+            .filter(|n| loadable.contains(n))
+            .collect()
+    }
+    let current = filt(order, &loadable);
+    let sort_held_by_pins = (!pins.top.is_empty() || !pins.bottom.is_empty())
+        && filt(&sort.proposed, &loadable) == current
+        && filt(&propose(mods, order, &Pins::default()).proposed, &loadable) != current;
     let conflicts = graph
         .conflicting()
         .into_iter()
@@ -70,6 +91,7 @@ pub fn build(mods: &[ModFile], order: &[String], pins: &Pins) -> Report {
         current_order: order.to_vec(),
         proposed_order: sort.proposed,
         moves: sort.moves,
+        sort_held_by_pins,
     }
 }
 
@@ -92,6 +114,54 @@ mod tests {
             error: None,
             gamebanana_mod_id: None,
         }
+    }
+
+    #[test]
+    fn held_by_pins_when_a_pin_silences_the_sorter() {
+        // Unpinned, the sorter wants Big (broad) before Small (specific).
+        let mods = vec![mk("Small", &["a"]), mk("Big", &["a", "b"])];
+        let order: Vec<String> = ["Small", "Big"].map(String::from).into();
+        let pins = Pins {
+            top: vec!["Small".to_string()],
+            bottom: vec![],
+        };
+        let report = build(&mods, &order, &pins);
+        assert!(report.moves.is_empty(), "pin should silence the sorter");
+        assert!(report.sort_held_by_pins);
+    }
+
+    #[test]
+    fn not_held_without_pins_or_when_pins_change_nothing() {
+        let mods = vec![mk("Small", &["a"]), mk("Big", &["a", "b"])];
+        let order: Vec<String> = ["Small", "Big"].map(String::from).into();
+        let unpinned = build(&mods, &order, &Pins::default());
+        assert!(!unpinned.moves.is_empty());
+        assert!(!unpinned.sort_held_by_pins);
+
+        let sorted_order: Vec<String> = ["Big", "Small"].map(String::from).into();
+        let harmless_pin = Pins {
+            top: vec!["Big".to_string()],
+            bottom: vec![],
+        };
+        let report = build(&mods, &sorted_order, &harmless_pin);
+        assert!(report.moves.is_empty());
+        assert!(!report.sort_held_by_pins);
+    }
+
+    #[test]
+    fn not_held_while_a_sort_is_still_proposed() {
+        let mods = vec![mk("Small", &["a"]), mk("Big", &["a", "b"])];
+        let order: Vec<String> = ["Big", "Small"].map(String::from).into();
+        let pins = Pins {
+            top: vec!["Small".to_string()],
+            bottom: vec![],
+        };
+        let report = build(&mods, &order, &pins);
+        assert!(
+            !report.moves.is_empty(),
+            "pinned proposal should still differ"
+        );
+        assert!(!report.sort_held_by_pins);
     }
 
     #[test]

@@ -8,9 +8,23 @@ const STRINGS = {
   rescan: { ship: "take inventory", plain: "rescan" },
   restow: { ship: "Re-stow the hold", plain: "Sort load order" },
   inOrder: { ship: "hold is in order", plain: "load order is optimal" },
+  sortHeld: {
+    ship: "hold is in order, held by its lashings",
+    plain: "load order held by pins",
+  },
+  sortHeldTip: {
+    ship: "the sorter would move pinned mods; pins keep them where you put them",
+    plain: "the sorter would move pinned mods; pins keep them where you put them",
+  },
   settings: { ship: "settings", plain: "settings" },
   ledgerHeading: { ship: "LADING, IN ORDER OF LOAD", plain: "LOAD ORDER" },
   notLoaded: { ship: "NOT LOADED", plain: "NOT LOADED" },
+  zoneFore: { ship: "LASHED FORE, LOADS FIRST", plain: "PINNED TOP, LOADS FIRST" },
+  zoneAft: { ship: "LASHED AFT, PREVAILS", plain: "PINNED BOTTOM, WINS CONFLICTS" },
+  holdShifted: {
+    ship: "the hold shifted in transit; pins re-lashed to their stations",
+    plain: "the load order changed outside Manifest; pinned mods were regrouped",
+  },
   clearMod: { ship: "clear: no contested cargo", plain: "no conflicts" },
   clearStatus: { ship: "clear", plain: "clear" },
   prevailsOver: { ship: "prevails over", plain: "overrides" },

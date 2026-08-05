@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import App from "./App.svelte";
 import { appState } from "./state.svelte";
 import { mkMod, mkReport } from "./lib/testReport";
@@ -9,7 +9,7 @@ vi.mock("./api", () => ({
   loadSettings: vi.fn(),
   scan: vi.fn(),
   applySort: vi.fn(),
-  setPin: vi.fn(),
+  reorder: vi.fn(),
   pickFile: vi.fn(),
   pickFolder: vi.fn(),
   setModsEnabled: vi.fn(),
@@ -240,5 +240,77 @@ describe("App", () => {
     expect(screen.queryByText("DAMAGED MANIFEST")).toBeNull();
     expect(screen.queryByText("NEW SHIPMENT DOCKED")).toBeNull();
     expect(mockedUpdates.checkForUpdate).toHaveBeenCalledOnce();
+  });
+});
+
+describe("hold shifted note", () => {
+  it("shows fine print when a pinned mod sits mid-order", async () => {
+    mocked.scan.mockResolvedValue(
+      mkReport({
+        mods: [
+          mkMod({ name: "A" }),
+          mkMod({ name: "P", pinned: "top" }),
+          mkMod({ name: "B" }),
+        ],
+        current_order: ["A", "P", "B"],
+        proposed_order: ["A", "P", "B"],
+      })
+    );
+    render(App);
+    expect(
+      await screen.findByText("the hold shifted in transit; pins re-lashed to their stations")
+    ).toBeTruthy();
+  });
+
+  it("stays hidden when zones match the order", async () => {
+    mocked.scan.mockResolvedValue(
+      mkReport({
+        mods: [mkMod({ name: "P", pinned: "top" }), mkMod({ name: "A" })],
+        current_order: ["P", "A"],
+        proposed_order: ["P", "A"],
+      })
+    );
+    render(App);
+    await screen.findAllByRole("row");
+    expect(
+      screen.queryByText("the hold shifted in transit; pins re-lashed to their stations")
+    ).toBeNull();
+  });
+});
+
+describe("physical pinning", () => {
+  const report = mkReport({
+    mods: [mkMod({ name: "A" }), mkMod({ name: "B" }), mkMod({ name: "C" })],
+    current_order: ["A", "B", "C"],
+    proposed_order: ["A", "B", "C"],
+  });
+
+  it("pin top moves the mod to the end of fore and reorders", async () => {
+    mocked.scan.mockResolvedValue(report);
+    mocked.reorder.mockResolvedValue(report);
+    render(App);
+    const rows = await screen.findAllByRole("row");
+    const bRow = rows.find((r) => r.textContent?.includes("B"))!;
+    await fireEvent.click(within(bRow).getByText("top"));
+    expect(mocked.reorder).toHaveBeenCalledWith(["B"], ["A", "C"], []);
+  });
+
+  it("unpin drops the mod at the adjacent edge of free cargo", async () => {
+    const pinned = mkReport({
+      mods: [
+        mkMod({ name: "P", pinned: "top" }),
+        mkMod({ name: "A" }),
+        mkMod({ name: "B" }),
+      ],
+      current_order: ["P", "A", "B"],
+      proposed_order: ["P", "A", "B"],
+    });
+    mocked.scan.mockResolvedValue(pinned);
+    mocked.reorder.mockResolvedValue(pinned);
+    render(App);
+    const rows = await screen.findAllByRole("row");
+    const pRow = rows.find((r) => r.textContent?.includes("P"))!;
+    await fireEvent.click(within(pRow).getByText("x"));
+    expect(mocked.reorder).toHaveBeenCalledWith([], ["P", "A", "B"], []);
   });
 });

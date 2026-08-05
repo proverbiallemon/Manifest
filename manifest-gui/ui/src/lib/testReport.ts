@@ -20,6 +20,7 @@ export function mkReport(over: Partial<Report>): Report {
     current_order: [],
     proposed_order: [],
     moves: [],
+    sort_held_by_pins: false,
     ...over,
   };
 }

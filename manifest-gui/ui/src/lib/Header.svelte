@@ -5,6 +5,7 @@
   let {
     configPath,
     sortNeeded,
+    sortHeld = false,
     moveCount,
     loading,
     damaged,
@@ -16,6 +17,7 @@
   }: {
     configPath: string | null;
     sortNeeded: boolean;
+    sortHeld?: boolean;
     moveCount: number;
     loading: boolean;
     damaged: boolean;
@@ -61,7 +63,11 @@
           {t("restow")} ({moveCount})
         </button>
       {:else if configPath && !damaged}
-        <span class="faded">{t("inOrder")}</span>
+        {#if sortHeld}
+          <span class="faded" title={t("sortHeldTip")}>{t("sortHeld")}</span>
+        {:else}
+          <span class="faded">{t("inOrder")}</span>
+        {/if}
       {/if}
       <span class="settings-wrap">
         <button

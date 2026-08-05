@@ -9,28 +9,46 @@
     line,
     conflicts,
     selected = false,
+    lifted = false,
     onSelect,
     onPin,
+    onGrab,
   }: {
     mod: ReportMod;
     line: number | null;
     conflicts: number;
     selected?: boolean;
+    lifted?: boolean;
     onSelect: (path: string) => void;
     onPin: (name: string, position: "top" | "bottom" | null) => void;
+    onGrab?: (e: PointerEvent) => void;
   } = $props();
 </script>
 
 <div
   class="row"
   class:selected
+  class:lifted
   class:notloaded={!mod.enabled}
   role="row"
   tabindex="0"
   onclick={() => onSelect(mod.path)}
   onkeydown={(e) => e.key === "Enter" && onSelect(mod.path)}
 >
-  <span class="line faded">{line ?? ""}</span>
+  <span class="line faded">
+    {#if onGrab && line !== null && !mod.error}
+      <span
+        class="grip"
+        title="drag to reorder"
+        onpointerdown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onGrab(e);
+        }}>::</span
+      >
+    {/if}
+    {line ?? ""}
+  </span>
   <span class="name">
     {#if mod.pinned}
       <img class="pixel seal" src={sealUrl} alt="pinned {mod.pinned}" title="pinned {mod.pinned}" />
@@ -48,10 +66,12 @@
     {/if}
   </span>
   <span class="pins">
-    <button title="pin to top (loads first)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "top"); }}>top</button>
-    <button title="pin to bottom (loads last, wins)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "bottom"); }}>btm</button>
-    {#if mod.pinned}
-      <button title="unpin" onclick={(e) => { e.stopPropagation(); onPin(mod.name, null); }}>x</button>
+    {#if line !== null && !mod.error}
+      <button title="pin to top (loads first)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "top"); }}>top</button>
+      <button title="pin to bottom (loads last, wins)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "bottom"); }}>btm</button>
+      {#if mod.pinned}
+        <button title="unpin" onclick={(e) => { e.stopPropagation(); onPin(mod.name, null); }}>x</button>
+      {/if}
     {/if}
   </span>
 </div>
@@ -70,6 +90,16 @@
     background: var(--paper-dark);
     outline: 2px solid var(--ink);
   }
+  .row.lifted {
+    background: var(--paper-dark);
+    box-shadow: 3px 3px 0 rgba(43, 38, 34, 0.35);
+    transform: translate(-1px, -2px);
+    position: relative;
+    z-index: 2;
+  }
+  .row.lifted .grip {
+    cursor: grabbing;
+  }
   .row.notloaded {
     color: var(--ink-faded);
   }
@@ -85,6 +115,11 @@
     width: 15px;
     height: 14px;
     vertical-align: -2px;
+  }
+  .grip {
+    cursor: grab;
+    user-select: none;
+    padding-right: 4px;
   }
   .pins {
     visibility: hidden;
