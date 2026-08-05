@@ -17,13 +17,6 @@ export function applySort(): Promise<Report> {
   return invoke("apply_sort");
 }
 
-export function setPin(
-  modName: string,
-  position: "top" | "bottom" | null
-): Promise<Report> {
-  return invoke("set_pin", { modName, position });
-}
-
 export function reorder(
   fore: string[],
   free: string[],

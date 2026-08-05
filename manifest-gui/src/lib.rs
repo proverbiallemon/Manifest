@@ -63,31 +63,6 @@ fn apply_sort_paths(config_path: &Path, mods_dir: &Path) -> Result<Report, Strin
     scan_paths(config_path, mods_dir)
 }
 
-fn set_pin_paths(
-    config_path: &Path,
-    mods_dir: &Path,
-    mod_name: &str,
-    position: Option<&str>,
-) -> Result<Report, String> {
-    let pins_path = pins::default_pins_path(config_path);
-    let context = |e: String| format!("{e} (pins: {})", pins_path.display());
-    let current = pins::read_pins(&pins_path).map_err(&context)?;
-    let mut top: Vec<String> = current.top.into_iter().filter(|n| n != mod_name).collect();
-    let mut bottom: Vec<String> = current
-        .bottom
-        .into_iter()
-        .filter(|n| n != mod_name)
-        .collect();
-    match position {
-        Some("top") => top.push(mod_name.to_string()),
-        Some("bottom") => bottom.push(mod_name.to_string()),
-        None => {}
-        Some(other) => return Err(format!("unknown pin position: {other}")),
-    }
-    pins::write_pins(&pins_path, &Pins { top, bottom }).map_err(&context)?;
-    scan_paths(config_path, mods_dir)
-}
-
 fn reorder_paths(
     config_path: &Path,
     mods_dir: &Path,
@@ -231,20 +206,6 @@ async fn apply_sort(state: tauri::State<'_, SharedPaths>) -> Result<Report, Stri
 }
 
 #[tauri::command]
-async fn set_pin(
-    mod_name: String,
-    position: Option<String>,
-    state: tauri::State<'_, SharedPaths>,
-) -> Result<Report, String> {
-    let (config_path, mods_dir) = stored_paths(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        set_pin_paths(&config_path, &mods_dir, &mod_name, position.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
 async fn reorder(
     fore: Vec<String>,
     free: Vec<String>,
@@ -306,7 +267,6 @@ pub fn run() {
             load_settings,
             scan,
             apply_sort,
-            set_pin,
             reorder,
             set_mods_enabled,
             pick_file,
@@ -375,33 +335,6 @@ mod tests {
     }
 
     #[test]
-    fn set_pin_paths_round_trips_through_pins_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let (config, mods) = fixture(dir.path());
-        let report = set_pin_paths(&config, &mods, "Small", Some("top")).unwrap();
-        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
-        assert_eq!(small.pinned.as_deref(), Some("top"));
-        assert_eq!(
-            report.proposed_order.first().map(String::as_str),
-            Some("Small")
-        );
-        let report = set_pin_paths(&config, &mods, "Small", None).unwrap();
-        let small = report.mods.iter().find(|m| m.name == "Small").unwrap();
-        assert_eq!(small.pinned, None);
-    }
-
-    #[test]
-    fn set_pin_paths_rejects_bad_position() {
-        let dir = tempfile::tempdir().unwrap();
-        let (config, mods) = fixture(dir.path());
-        let err = set_pin_paths(&config, &mods, "Small", Some("sideways")).unwrap_err();
-        assert!(
-            err.contains("position"),
-            "error should name position: {err}"
-        );
-    }
-
-    #[test]
     fn settings_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let stored = StoredSettings {
@@ -423,23 +356,6 @@ mod tests {
         assert!(
             err.contains("shipofharkinian.json"),
             "error should include the config path: {err}"
-        );
-    }
-
-    #[test]
-    fn set_pin_errors_name_the_pins_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let (config, mods) = fixture(dir.path());
-        let pins_path = pins::default_pins_path(&config);
-        std::fs::write(
-            &pins_path,
-            r#"{"schema_version":1,"top":"nope","bottom":[]}"#,
-        )
-        .unwrap();
-        let err = set_pin_paths(&config, &mods, "Small", Some("top")).unwrap_err();
-        assert!(
-            err.contains("manifest-pins.json"),
-            "error should include the pins path: {err}"
         );
     }
 
@@ -605,6 +521,27 @@ mod tests {
         assert!(
             err.contains("shipofharkinian.json"),
             "error should include the config path: {err}"
+        );
+    }
+
+    #[test]
+    fn reorder_errors_name_the_pins_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, mods) = fixture(dir.path());
+        let pins_dir = pins::default_pins_path(&config);
+        // Make the pins path unwritable by occupying it with a directory.
+        std::fs::create_dir(&pins_dir).unwrap();
+        let err = reorder_paths(
+            &config,
+            &mods,
+            &[],
+            &["Small".to_string(), "Big".to_string()],
+            &[],
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("manifest-pins.json"),
+            "error should include the pins path: {err}"
         );
     }
 }

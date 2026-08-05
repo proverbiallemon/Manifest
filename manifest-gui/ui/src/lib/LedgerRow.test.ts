@@ -37,4 +37,18 @@ describe("LedgerRow", () => {
     });
     expect(screen.getByAltText("unlistable")).toBeTruthy();
   });
+
+  it("hides pin controls on rows outside the order", () => {
+    render(LedgerRow, {
+      props: {
+        mod: mkMod({ name: "Stray", enabled: false }),
+        line: null,
+        conflicts: 0,
+        onSelect: () => {},
+        onPin: () => {},
+      },
+    });
+    expect(screen.queryByText("top")).toBeNull();
+    expect(screen.queryByText("btm")).toBeNull();
+  });
 });

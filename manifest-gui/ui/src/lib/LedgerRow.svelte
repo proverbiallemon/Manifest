@@ -48,10 +48,12 @@
     {/if}
   </span>
   <span class="pins">
-    <button title="pin to top (loads first)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "top"); }}>top</button>
-    <button title="pin to bottom (loads last, wins)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "bottom"); }}>btm</button>
-    {#if mod.pinned}
-      <button title="unpin" onclick={(e) => { e.stopPropagation(); onPin(mod.name, null); }}>x</button>
+    {#if line !== null}
+      <button title="pin to top (loads first)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "top"); }}>top</button>
+      <button title="pin to bottom (loads last, wins)" onclick={(e) => { e.stopPropagation(); onPin(mod.name, "bottom"); }}>btm</button>
+      {#if mod.pinned}
+        <button title="unpin" onclick={(e) => { e.stopPropagation(); onPin(mod.name, null); }}>x</button>
+      {/if}
     {/if}
   </span>
 </div>
